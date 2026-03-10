@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="muted">Controle geral da farmácia e das entregas</p>
+  </div>
+</div>
+
+<div class="cards-grid">
+  <div class="card">
+    <h3>Clientes</h3>
+    <strong>{{ total_clientes }}</strong>
+  </div>
+  <div class="card">
+    <h3>Entregadores</h3>
+    <strong>{{ total_entregadores }}</strong>
+  </div>
+  <div class="card">
+    <h3>Pedidos</h3>
+    <strong>{{ total_pedidos }}</strong>
+  </div>
+  <div class="card">
+    <h3>Em entrega</h3>
+    <strong>{{ pedidos_entrega }}</strong>
+  </div>
+</div>
+
+<div class="cards-grid">
+  <div class="card">
+    <h3>Recebidos</h3>
+    <strong>{{ pedidos_recebidos }}</strong>
+  </div>
+  <div class="card">
+    <h3>Separação</h3>
+    <strong>{{ pedidos_separacao }}</strong>
+  </div>
+  <div class="card">
+    <h3>Entregues</h3>
+    <strong>{{ pedidos_entregues }}</strong>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head-flex">
+    <div>
+      <h2>Mapa dos Entregadores</h2>
+      <p class="muted">Atualização automática a cada 5 segundos</p>
+    </div>
+  </div>
+  <div id="mapa-entregadores" style="height: 420px; border-radius: 16px;"></div>
+</div>
+
+<div class="panel">
+  <h2>Últimos Pedidos</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Descrição</th>
+          <th>Valor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pedido in ultimos_pedidos %}
+        <tr>
+          <td>#{{ pedido.id }}</td>
+          <td>{{ pedido.cliente.nome }}</td>
+          <td>{{ pedido.descricao }}</td>
+          <td>R$ {{ "%.2f"|format(pedido.valor) }}</td>
+          <td>{{ pedido.status }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">Nenhum pedido cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+console.log("SCRIPT DASHBOARD CARREGOU");
+
+let mapa = null;
+let camadaMarcadores = null;
+let marcadores = {};
+
+function criarIconeOnline() {
+  return L.divIcon({
+    className: "",
+    html: `
+      <div class="marker-wrap">
+        <div class="marker-ping"></div>
+        <div class="marker-core online"></div>
+      </div>
+    `,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+  });
+}
+
+function criarIconeOffline() {
+  return L.divIcon({
+    className: "",
+    html: `
+      <div class="marker-wrap">
+        <div class="marker-core offline"></div>
+      </div>
+    `,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+  });
+}
+
+function animarMarcador(marker, destino, duracao = 1200) {
+  const inicio = marker.getLatLng();
+  const inicioTempo = performance.now();
+
+  function passo(agora) {
+    const progresso = Math.min((agora - inicioTempo) / duracao, 1);
+
+    const lat = inicio.lat + (destino[0] - inicio.lat) * progresso;
+    const lng = inicio.lng + (destino[1] - inicio.lng) * progresso;
+
+    marker.setLatLng([lat, lng]);
+
+    if (progresso < 1) {
+      requestAnimationFrame(passo);
+    }
+  }
+
+  requestAnimationFrame(passo);
+}
+
+async function carregarMapaEntregadores() {
+  console.log("ATUALIZANDO MAPA...");
+
+  const el = document.getElementById("mapa-entregadores");
+  if (!el) return;
+
+  if (!mapa) {
+    mapa = L.map("mapa-entregadores").setView([-3.7319, -38.5267], 12);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(mapa);
+
+    camadaMarcadores = L.layerGroup().addTo(mapa);
+  }
+
+  try {
+    const res = await fetch("/api/mapa/entregadores");
+    const data = await res.json();
+
+    console.log("DADOS MAPA:", data);
+
+    const idsAtuais = new Set();
+
+    data.forEach(item => {
+      const lat = parseFloat(item.latitude);
+      const lng = parseFloat(item.longitude);
+
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      idsAtuais.add(String(item.id));
+
+      const icone = item.online ? criarIconeOnline() : criarIconeOffline();
+      const statusTexto = item.online ? "Online" : "Offline";
+
+      const popupHtml = `
+        <strong>${item.nome}</strong><br>
+        ${item.telefone}<br>
+        Status: <strong>${statusTexto}</strong><br>
+        Última atualização: ${item.data_hora}<br>
+        ${item.pedido_id ? `Pedido: #${item.pedido_id}` : "Sem pedido ativo"}
+      `;
+
+      if (marcadores[item.id]) {
+        const marker = marcadores[item.id];
+        marker.setIcon(icone);
+        marker.setPopupContent(popupHtml);
+        animarMarcador(marker, [lat, lng], 1400);
+      } else {
+        const marker = L.marker([lat, lng], { icon: icone }).addTo(camadaMarcadores);
+        marker.bindPopup(popupHtml);
+        marcadores[item.id] = marker;
+      }
+    });
+
+    Object.keys(marcadores).forEach(id => {
+      if (!idsAtuais.has(String(id))) {
+        camadaMarcadores.removeLayer(marcadores[id]);
+        delete marcadores[id];
+      }
+    });
+
+  } catch (e) {
+    console.error("Erro ao carregar entregadores no mapa:", e);
+  }
+}
+
+carregarMapaEntregadores();
+setInterval(carregarMapaEntregadores, 5000);
+</script>
+{% endblock %}

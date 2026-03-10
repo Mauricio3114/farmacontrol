@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}FarmaControl{% endblock %}</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="{{ url_for('manifest') }}">
+  <meta name="theme-color" content="#0f172a">
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+</head>
+<body>
+  <div class="app-shell">
+    {% if current_user.is_authenticated and request.endpoint not in ['login', 'entregador_login'] %}
+    <aside class="sidebar">
+      <div class="brand">
+        <h2>FarmaControl</h2>
+        <p>Painel Administrativo</p>
+      </div>
+
+      <nav class="menu">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('clientes') }}">Clientes</a>
+        <a href="{{ url_for('entregadores') }}">Entregadores</a>
+        <a href="{{ url_for('pedidos') }}">Pedidos</a>
+        <a href="{{ url_for('whatsapp_config') }}">WhatsApp</a>
+        <a href="{{ url_for('relatorios') }}">Relatórios</a>
+        <a href="{{ url_for('entregador_login') }}" target="_blank">App Entregador</a>
+        <a href="{{ url_for('logout') }}">Sair</a>
+      </nav>
+    </aside>
+    {% endif %}
+
+    <main class="main-content {% if not current_user.is_authenticated %}full{% endif %}">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-wrap">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

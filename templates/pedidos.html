@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Pedidos{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Pedidos</h1>
+    <p class="muted">Cadastro e acompanhamento dos pedidos</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Novo Pedido</h2>
+  <form method="post" class="form-grid">
+    <select name="cliente_id" required>
+      <option value="">Selecione o cliente</option>
+      {% for cliente in clientes %}
+        <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="entregador_id">
+      <option value="">Selecione o entregador</option>
+      {% for entregador in entregadores %}
+        <option value="{{ entregador.id }}">{{ entregador.nome }}</option>
+      {% endfor %}
+    </select>
+
+    <input type="text" name="valor" placeholder="Valor do pedido" required>
+
+    <select name="status" required>
+      <option value="recebido">Recebido</option>
+      <option value="separacao">Separação</option>
+      <option value="saiu_entrega">Saiu para entrega</option>
+      <option value="entregue">Entregue</option>
+    </select>
+
+    <textarea name="descricao" placeholder="Descrição do pedido" required></textarea>
+
+    <button type="submit" class="btn btn-primary">Cadastrar Pedido</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Lista de Pedidos</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Entregador</th>
+          <th>Descrição</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th>Rastreio</th>
+          <th>WhatsApp</th>
+          <th>Atualizar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pedido in pedidos %}
+        <tr>
+          <td>#{{ pedido.id }}</td>
+          <td>{{ pedido.cliente.nome }}</td>
+          <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
+          <td>{{ pedido.descricao }}</td>
+          <td>R$ {{ "%.2f"|format(pedido.valor) }}</td>
+          <td>{{ pedido.status }}</td>
+          <td>
+            <a class="btn btn-route-google" href="{{ url_for('rastreio_cliente', codigo=pedido.codigo_rastreio) }}" target="_blank">
+              Rastrear pedido
+            </a>
+          </td>
+          <td>
+            <a class="btn btn-route-waze" href="{{ url_for('whatsapp_cliente', pedido_id=pedido.id) }}" target="_blank">
+              Enviar link
+            </a>
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('atualizar_status_pedido', pedido_id=pedido.id) }}" class="inline-form">
+              <select name="status">
+                <option value="recebido" {% if pedido.status == "recebido" %}selected{% endif %}>Recebido</option>
+                <option value="separacao" {% if pedido.status == "separacao" %}selected{% endif %}>Separação</option>
+                <option value="saiu_entrega" {% if pedido.status == "saiu_entrega" %}selected{% endif %}>Saiu para entrega</option>
+                <option value="entregue" {% if pedido.status == "entregue" %}selected{% endif %}>Entregue</option>
+              </select>
+              <button type="submit" class="btn btn-secondary">Salvar</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9">Nenhum pedido cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

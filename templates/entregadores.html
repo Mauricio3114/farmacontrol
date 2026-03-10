@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Entregadores{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Entregadores</h1>
+    <p class="muted">Cadastro de motoboys e entregadores</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Novo Entregador</h2>
+  <form method="post" class="form-grid">
+    <input type="text" name="nome" placeholder="Nome do entregador" required>
+    <input type="text" name="telefone" placeholder="Telefone" required>
+    <input type="password" name="senha" placeholder="Senha do entregador" required>
+    <button type="submit" class="btn btn-primary">Cadastrar Entregador</button>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="panel-head-flex">
+    <div>
+      <h2>Lista de Entregadores</h2>
+      <p class="muted">O entregador deve acessar pelo próprio link de login</p>
+    </div>
+    <div>
+      <a class="btn btn-secondary" href="{{ url_for('entregador_login') }}" target="_blank">
+        Login do Entregador
+      </a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nome</th>
+          <th>Telefone</th>
+          <th>Status</th>
+          <th>Login</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entregador in entregadores %}
+        <tr>
+          <td>#{{ entregador.id }}</td>
+          <td>{{ entregador.nome }}</td>
+          <td>{{ entregador.telefone }}</td>
+          <td>{{ "Ativo" if entregador.ativo else "Inativo" }}</td>
+          <td>
+            <span class="tag">{{ entregador.telefone }}</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">Nenhum entregador cadastrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

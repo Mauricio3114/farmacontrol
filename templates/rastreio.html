@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rastreio do Pedido</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <style>
+    .rast-card {
+      background: linear-gradient(135deg, #0f172a, #111827);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+      margin-bottom: 18px;
+    }
+
+    .rast-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .rast-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .rast-kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .rast-kpi {
+      background: #020617;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .rast-kpi span {
+      display: block;
+      color: #94a3b8;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .rast-kpi strong {
+      font-size: 22px;
+      color: #38bdf8;
+    }
+
+    .moto-marker-wrap {
+      position: relative;
+      width: 34px;
+      height: 34px;
+    }
+
+    .moto-marker-ping {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.25);
+      animation: rastPing 1.6s infinite;
+    }
+
+    .moto-marker-core {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0f172a;
+      font-size: 13px;
+      font-weight: bold;
+      box-shadow: 0 0 14px rgba(0,0,0,0.35);
+    }
+
+    @keyframes rastPing {
+      0% {
+        transform: scale(0.8);
+        opacity: 1;
+      }
+      70% {
+        transform: scale(1.8);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1.8);
+        opacity: 0;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .rast-top {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body class="mobile-app-body">
+  <div class="mobile-app">
+    <div class="mobile-top">
+      <h1>Rastreio do Pedido #{{ pedido.id }}</h1>
+      <p>Acompanhe sua entrega em tempo real</p>
+    </div>
+
+    <div class="rast-card">
+      <div class="rast-top">
+        <div>
+          <h2 style="margin-bottom:6px;">{{ pedido.cliente.nome }}</h2>
+          <p class="muted">Código: {{ pedido.codigo_rastreio }}</p>
+        </div>
+        <span id="status-rastreio" class="status-badge status-{{ pedido.status }}">{{ pedido.status }}</span>
+      </div>
+
+      <div class="rast-grid">
+        <p><strong>Endereço:</strong> {{ pedido.cliente.endereco }}</p>
+        <p><strong>Entregador:</strong> <span id="entregador-rastreio">{{ pedido.entregador.nome if pedido.entregador else 'Aguardando' }}</span></p>
+        <p><strong>Última atualização:</strong> <span id="ultima-atualizacao">--</span></p>
+      </div>
+
+      <div class="rast-kpis">
+        <div class="rast-kpi">
+          <span>Status</span>
+          <strong id="status-kpi">{{ pedido.status }}</strong>
+        </div>
+        <div class="rast-kpi">
+          <span>Estimativa</span>
+          <strong id="estimativa-kpi">--</strong>
+        </div>
+        <div class="rast-kpi">
+          <span>Entrega</span>
+          <strong id="entrega-kpi">
+            {% if pedido.status == 'entregue' %}Concluída{% else %}Em andamento{% endif %}
+          </strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="rast-card">
+      <h2 style="margin-bottom:14px;">Mapa da entrega</h2>
+      <div id="mapa-rastreio" style="height: 440px; border-radius: 16px;"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    let mapa = null;
+    let marcador = null;
+    const codigo = "{{ pedido.codigo_rastreio }}";
+
+    function statusClass(status) {
+      return `status-badge status-${status}`;
+    }
+
+    function criarIconeMoto() {
+      return L.divIcon({
+        className: "",
+        html: `
+          <div class="moto-marker-wrap">
+            <div class="moto-marker-ping"></div>
+            <div class="moto-marker-core">🛵</div>
+          </div>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+    }
+
+    async function carregarRastreio() {
+      try {
+        const res = await fetch(`/api/rastreio/${codigo}`);
+        const data = await res.json();
+
+        const statusEl = document.getElementById("status-rastreio");
+        const statusKpi = document.getElementById("status-kpi");
+        const entregadorEl = document.getElementById("entregador-rastreio");
+        const ultimaEl = document.getElementById("ultima-atualizacao");
+        const estimativaEl = document.getElementById("estimativa-kpi");
+        const entregaKpi = document.getElementById("entrega-kpi");
+
+        statusEl.textContent = data.status;
+        statusEl.className = statusClass(data.status);
+
+        statusKpi.textContent = data.status;
+        entregadorEl.textContent = data.entregador || "Aguardando";
+        ultimaEl.textContent = data.data_hora || "--";
+
+        if (data.tempo_estimado_min) {
+          estimativaEl.textContent = `${data.tempo_estimado_min} min`;
+        } else if (data.status === "entregue") {
+          estimativaEl.textContent = "Finalizada";
+        } else {
+          estimativaEl.textContent = "--";
+        }
+
+        entregaKpi.textContent = data.status === "entregue" ? "Concluída" : "Em andamento";
+
+        if (!mapa) {
+          mapa = L.map("mapa-rastreio").setView([-3.7319, -38.5267], 13);
+
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap"
+          }).addTo(mapa);
+        }
+
+        if (data.latitude && data.longitude) {
+          const lat = parseFloat(data.latitude);
+          const lng = parseFloat(data.longitude);
+
+          if (!isNaN(lat) && !isNaN(lng)) {
+            if (marcador) {
+              marcador.setLatLng([lat, lng]);
+            } else {
+              marcador = L.marker([lat, lng], { icon: criarIconeMoto() }).addTo(mapa);
+            }
+
+            marcador.bindPopup(`
+              <strong>Pedido #${data.pedido_id}</strong><br>
+              Status: ${data.status}<br>
+              Entregador: ${data.entregador || "Aguardando"}<br>
+              Atualização: ${data.data_hora || "--"}
+            `);
+
+            mapa.setView([lat, lng], 15, { animate: true });
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar rastreio:", e);
+      }
+    }
+
+    carregarRastreio();
+    setInterval(carregarRastreio, 5000);
+  </script>
+</body>
+</html>

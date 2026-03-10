@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Relatórios</h1>
+    <p class="muted">Relatórios semanais, mensais e por período</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Filtros</h2>
+
+  <form method="get" class="form-grid">
+    <input type="date" name="inicio" value="{{ inicio or '' }}">
+    <input type="date" name="fim" value="{{ fim or '' }}">
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+    <a
+      class="btn btn-secondary"
+      href="{{ url_for('relatorios_pdf', inicio=inicio, fim=fim) }}"
+      target="_blank"
+    >
+      Baixar PDF
+    </a>
+  </form>
+</div>
+
+<div class="cards-grid">
+  <div class="card">
+    <h3>Total de pedidos</h3>
+    <strong>{{ total_pedidos }}</strong>
+  </div>
+  <div class="card">
+    <h3>Entregues</h3>
+    <strong>{{ total_entregues }}</strong>
+  </div>
+  <div class="card">
+    <h3>Faturamento</h3>
+    <strong>R$ {{ "%.2f"|format(faturamento_total) }}</strong>
+  </div>
+  <div class="card">
+    <h3>Ticket médio</h3>
+    <strong>R$ {{ "%.2f"|format(ticket_medio) }}</strong>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Pedidos do período</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Cliente</th>
+          <th>Entregador</th>
+          <th>Valor</th>
+          <th>Status</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pedidos %}
+        <tr>
+          <td>#{{ p.id }}</td>
+          <td>{{ p.cliente.nome if p.cliente else "-" }}</td>
+          <td>{{ p.entregador.nome if p.entregador else "-" }}</td>
+          <td>R$ {{ "%.2f"|format(p.valor or 0) }}</td>
+          <td>{{ p.status }}</td>
+          <td>{{ p.criado_em.strftime("%d/%m/%Y %H:%M") if p.criado_em else "-" }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6">Nenhum pedido encontrado para esse período.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

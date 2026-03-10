@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>WhatsApp</h1>
+    <p class="muted">Configuração da integração oficial da farmácia</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Configuração da API</h2>
+
+  <form method="post" class="form-grid">
+    <select name="ativo">
+      <option value="">Desativado</option>
+      <option value="1" {% if cfg.ativo %}selected{% endif %}>Ativado</option>
+    </select>
+
+    <input
+      type="text"
+      name="access_token"
+      placeholder="Access Token"
+      value="{{ cfg.access_token or '' }}"
+    >
+
+    <input
+      type="text"
+      name="phone_number_id"
+      placeholder="Phone Number ID"
+      value="{{ cfg.phone_number_id or '' }}"
+    >
+
+    <input
+      type="text"
+      name="business_account_id"
+      placeholder="Business Account ID"
+      value="{{ cfg.business_account_id or '' }}"
+    >
+
+    <input
+      type="text"
+      name="verify_token"
+      placeholder="Verify Token"
+      value="{{ cfg.verify_token or '' }}"
+    >
+
+    <input
+      type="text"
+      name="nome_template_pedido_recebido"
+      placeholder="Template pedido recebido"
+      value="{{ cfg.nome_template_pedido_recebido or '' }}"
+    >
+
+    <input
+      type="text"
+      name="nome_template_saiu_entrega"
+      placeholder="Template saiu para entrega"
+      value="{{ cfg.nome_template_saiu_entrega or '' }}"
+    >
+
+    <input
+      type="text"
+      name="nome_template_pedido_entregue"
+      placeholder="Template pedido entregue"
+      value="{{ cfg.nome_template_pedido_entregue or '' }}"
+    >
+
+    <label class="check-line">
+      <input type="checkbox" name="enviar_pedido_recebido" {% if cfg.enviar_pedido_recebido %}checked{% endif %}>
+      <span>Enviar mensagem quando pedido for recebido</span>
+    </label>
+
+    <label class="check-line">
+      <input type="checkbox" name="enviar_saiu_entrega" {% if cfg.enviar_saiu_entrega %}checked{% endif %}>
+      <span>Enviar mensagem quando sair para entrega</span>
+    </label>
+
+    <label class="check-line">
+      <input type="checkbox" name="enviar_pedido_entregue" {% if cfg.enviar_pedido_entregue %}checked{% endif %}>
+      <span>Enviar mensagem quando pedido for entregue</span>
+    </label>
+
+    <button type="submit" class="btn btn-primary">Salvar Configuração</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Teste de envio</h2>
+
+  <form method="post" action="{{ url_for('whatsapp_teste') }}" class="form-grid">
+    <input
+      type="text"
+      name="numero"
+      placeholder="Telefone ex: 5585999999999"
+      required
+    >
+
+    <textarea
+      name="mensagem"
+      placeholder="Mensagem de teste"
+      required
+    ></textarea>
+
+    <button class="btn btn-primary" type="submit">Enviar teste</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Logs WhatsApp</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Destino</th>
+          <th>Status</th>
+          <th>Tipo</th>
+          <th>Mensagem</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td>{{ log.id }}</td>
+          <td>{{ log.destino or "-" }}</td>
+          <td>{{ log.status }}</td>
+          <td>{{ log.tipo }}</td>
+          <td>{{ log.mensagem or "-" }}</td>
+          <td>{{ log.criado_em }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6">Nenhum log encontrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
