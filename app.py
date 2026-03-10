@@ -402,7 +402,6 @@ def registrar_rotas(app):
         logout_user()
         session.pop("entregador_id", None)
         session.pop("entregador_farmacia_id", None)
-        flash("Você saiu do sistema.", "info")
         return redirect(url_for("login"))
 
     @app.route("/dashboard")
