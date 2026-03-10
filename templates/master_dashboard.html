@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Geral{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Administração do Sistema</h1>
+    <p class="muted">Controle geral das farmácias cadastradas</p>
+  </div>
+</div>
+
+<div class="cards-grid">
+
+  <div class="card">
+    <h3>Farmácias cadastradas</h3>
+    <strong>{{ total_farmacias }}</strong>
+  </div>
+
+  <div class="card">
+    <h3>Farmácias ativas</h3>
+    <strong>{{ total_farmacias_ativas }}</strong>
+  </div>
+
+  <div class="card">
+    <h3>Usuários cadastrados</h3>
+    <strong>{{ total_usuarios }}</strong>
+  </div>
+
+</div>
+
+<div class="panel">
+
+  <div class="panel-head-flex">
+    <div>
+      <h2>Farmácias no sistema</h2>
+      <p class="muted">Lista das últimas farmácias cadastradas</p>
+    </div>
+
+    <div>
+      <a href="{{ url_for('master_farmacias') }}" class="btn btn-primary">
+        Nova Farmácia
+      </a>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Farmácia</th>
+          <th>Cidade</th>
+          <th>Plano</th>
+          <th>Status</th>
+          <th>Ativa</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        {% for farmacia in farmacias %}
+
+        <tr>
+          <td>#{{ farmacia.id }}</td>
+
+          <td>{{ farmacia.nome }}</td>
+
+          <td>
+            {{ farmacia.cidade if farmacia.cidade else "-" }}
+          </td>
+
+          <td>{{ farmacia.plano }}</td>
+
+          <td>{{ farmacia.status }}</td>
+
+          <td>
+            {% if farmacia.ativo %}
+              <span class="badge badge-success">Sim</span>
+            {% else %}
+              <span class="badge badge-danger">Não</span>
+            {% endif %}
+          </td>
+
+        </tr>
+
+        {% else %}
+
+        <tr>
+          <td colspan="6">Nenhuma farmácia cadastrada.</td>
+        </tr>
+
+        {% endfor %}
+
+      </tbody>
+
+    </table>
+  </div>
+
+</div>
+
+{% endblock %}

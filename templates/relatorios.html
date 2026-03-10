@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Relatórios</h1>
-    <p class="muted">Relatórios semanais, mensais e por período</p>
+    <p class="muted">Relatórios por período</p>
   </div>
 </div>
 
@@ -32,16 +32,20 @@
     <strong>{{ total_pedidos }}</strong>
   </div>
   <div class="card">
+    <h3>Recebidos</h3>
+    <strong>{{ total_recebidos }}</strong>
+  </div>
+  <div class="card">
+    <h3>Separação</h3>
+    <strong>{{ total_separacao }}</strong>
+  </div>
+  <div class="card">
+    <h3>Saiu para entrega</h3>
+    <strong>{{ total_saiu_entrega }}</strong>
+  </div>
+  <div class="card">
     <h3>Entregues</h3>
     <strong>{{ total_entregues }}</strong>
-  </div>
-  <div class="card">
-    <h3>Faturamento</h3>
-    <strong>R$ {{ "%.2f"|format(faturamento_total) }}</strong>
-  </div>
-  <div class="card">
-    <h3>Ticket médio</h3>
-    <strong>R$ {{ "%.2f"|format(ticket_medio) }}</strong>
   </div>
 </div>
 
@@ -52,10 +56,10 @@
     <table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th>Pedido</th>
           <th>Cliente</th>
+          <th>Endereço</th>
           <th>Entregador</th>
-          <th>Valor</th>
           <th>Status</th>
           <th>Data</th>
         </tr>
@@ -65,8 +69,8 @@
         <tr>
           <td>#{{ p.id }}</td>
           <td>{{ p.cliente.nome if p.cliente else "-" }}</td>
+          <td>{{ p.cliente.endereco if p.cliente else "-" }}</td>
           <td>{{ p.entregador.nome if p.entregador else "-" }}</td>
-          <td>R$ {{ "%.2f"|format(p.valor or 0) }}</td>
           <td>{{ p.status }}</td>
           <td>{{ p.criado_em.strftime("%d/%m/%Y %H:%M") if p.criado_em else "-" }}</td>
         </tr>

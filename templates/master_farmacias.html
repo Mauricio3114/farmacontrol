@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Farmácias{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Farmácias</h1>
+    <p class="muted">Cadastro e gerenciamento das farmácias do sistema</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Nova Farmácia</h2>
+
+  <form method="post" class="form-grid">
+    <input type="text" name="nome" placeholder="Nome da farmácia" required>
+    <input type="text" name="cnpj" placeholder="CNPJ">
+    <input type="text" name="telefone" placeholder="Telefone">
+    <input type="email" name="email" placeholder="E-mail">
+    <input type="text" name="cidade" placeholder="Cidade">
+    <input type="text" name="endereco" placeholder="Endereço">
+
+    <select name="plano">
+      <option value="basico">Básico</option>
+      <option value="pro">Pro</option>
+      <option value="premium">Premium</option>
+    </select>
+
+    <select name="status">
+      <option value="ativa">Ativa</option>
+      <option value="inativa">Inativa</option>
+    </select>
+
+    <button type="submit" class="btn btn-primary">Cadastrar Farmácia</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Lista de Farmácias</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Farmácia</th>
+          <th>CNPJ</th>
+          <th>Telefone</th>
+          <th>Cidade</th>
+          <th>Plano</th>
+          <th>Status</th>
+          <th>Ativa</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for farmacia in farmacias %}
+        <tr>
+          <td>#{{ farmacia.id }}</td>
+          <td>{{ farmacia.nome }}</td>
+          <td>{{ farmacia.cnpj or "-" }}</td>
+          <td>{{ farmacia.telefone or "-" }}</td>
+          <td>{{ farmacia.cidade or "-" }}</td>
+          <td>{{ farmacia.plano }}</td>
+          <td>{{ farmacia.status }}</td>
+          <td>{{ "Sim" if farmacia.ativo else "Não" }}</td>
+          <td>
+            <a href="{{ url_for('master_toggle_farmacia', farmacia_id=farmacia.id) }}" class="btn btn-secondary">
+              {{ "Desativar" if farmacia.ativo else "Ativar" }}
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9">Nenhuma farmácia cadastrada.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

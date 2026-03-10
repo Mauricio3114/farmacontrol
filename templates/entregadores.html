@@ -23,7 +23,7 @@
   <div class="panel-head-flex">
     <div>
       <h2>Lista de Entregadores</h2>
-      <p class="muted">O entregador deve acessar pelo próprio link de login</p>
+      <p class="muted">O entregador acessa pelo link próprio de login</p>
     </div>
     <div>
       <a class="btn btn-secondary" href="{{ url_for('entregador_login') }}" target="_blank">
@@ -50,9 +50,7 @@
           <td>{{ entregador.nome }}</td>
           <td>{{ entregador.telefone }}</td>
           <td>{{ "Ativo" if entregador.ativo else "Inativo" }}</td>
-          <td>
-            <span class="tag">{{ entregador.telefone }}</span>
-          </td>
+          <td><span class="tag">{{ entregador.telefone }}</span></td>
         </tr>
         {% else %}
         <tr>

@@ -5,7 +5,12 @@
 <div class="page-head">
   <div>
     <h1>Dashboard</h1>
-    <p class="muted">Controle geral da farmácia e das entregas</p>
+    <p class="muted">
+      Controle geral da farmácia e das entregas
+      {% if farmacia %}
+        • {{ farmacia.nome }}
+      {% endif %}
+    </p>
   </div>
 </div>
 
@@ -59,10 +64,10 @@
     <table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th>Pedido</th>
           <th>Cliente</th>
-          <th>Descrição</th>
-          <th>Valor</th>
+          <th>Endereço</th>
+          <th>Entregador</th>
           <th>Status</th>
         </tr>
       </thead>
@@ -71,8 +76,8 @@
         <tr>
           <td>#{{ pedido.id }}</td>
           <td>{{ pedido.cliente.nome }}</td>
-          <td>{{ pedido.descricao }}</td>
-          <td>R$ {{ "%.2f"|format(pedido.valor) }}</td>
+          <td>{{ pedido.cliente.endereco }}</td>
+          <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
           <td>{{ pedido.status }}</td>
         </tr>
         {% else %}

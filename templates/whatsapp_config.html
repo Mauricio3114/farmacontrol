@@ -14,58 +14,18 @@
 
   <form method="post" class="form-grid">
     <select name="ativo">
-      <option value="">Desativado</option>
+      <option value="" {% if not cfg.ativo %}selected{% endif %}>Desativado</option>
       <option value="1" {% if cfg.ativo %}selected{% endif %}>Ativado</option>
     </select>
 
-    <input
-      type="text"
-      name="access_token"
-      placeholder="Access Token"
-      value="{{ cfg.access_token or '' }}"
-    >
+    <input type="text" name="access_token" placeholder="Access Token" value="{{ cfg.access_token or '' }}">
+    <input type="text" name="phone_number_id" placeholder="Phone Number ID" value="{{ cfg.phone_number_id or '' }}">
+    <input type="text" name="business_account_id" placeholder="Business Account ID" value="{{ cfg.business_account_id or '' }}">
+    <input type="text" name="verify_token" placeholder="Verify Token" value="{{ cfg.verify_token or '' }}">
 
-    <input
-      type="text"
-      name="phone_number_id"
-      placeholder="Phone Number ID"
-      value="{{ cfg.phone_number_id or '' }}"
-    >
-
-    <input
-      type="text"
-      name="business_account_id"
-      placeholder="Business Account ID"
-      value="{{ cfg.business_account_id or '' }}"
-    >
-
-    <input
-      type="text"
-      name="verify_token"
-      placeholder="Verify Token"
-      value="{{ cfg.verify_token or '' }}"
-    >
-
-    <input
-      type="text"
-      name="nome_template_pedido_recebido"
-      placeholder="Template pedido recebido"
-      value="{{ cfg.nome_template_pedido_recebido or '' }}"
-    >
-
-    <input
-      type="text"
-      name="nome_template_saiu_entrega"
-      placeholder="Template saiu para entrega"
-      value="{{ cfg.nome_template_saiu_entrega or '' }}"
-    >
-
-    <input
-      type="text"
-      name="nome_template_pedido_entregue"
-      placeholder="Template pedido entregue"
-      value="{{ cfg.nome_template_pedido_entregue or '' }}"
-    >
+    <input type="text" name="nome_template_pedido_recebido" placeholder="Template pedido recebido" value="{{ cfg.nome_template_pedido_recebido or '' }}">
+    <input type="text" name="nome_template_saiu_entrega" placeholder="Template saiu para entrega" value="{{ cfg.nome_template_saiu_entrega or '' }}">
+    <input type="text" name="nome_template_pedido_entregue" placeholder="Template pedido entregue" value="{{ cfg.nome_template_pedido_entregue or '' }}">
 
     <label class="check-line">
       <input type="checkbox" name="enviar_pedido_recebido" {% if cfg.enviar_pedido_recebido %}checked{% endif %}>
@@ -90,19 +50,8 @@
   <h2>Teste de envio</h2>
 
   <form method="post" action="{{ url_for('whatsapp_teste') }}" class="form-grid">
-    <input
-      type="text"
-      name="numero"
-      placeholder="Telefone ex: 5585999999999"
-      required
-    >
-
-    <textarea
-      name="mensagem"
-      placeholder="Mensagem de teste"
-      required
-    ></textarea>
-
+    <input type="text" name="numero" placeholder="Telefone ex: 5585999999999" required>
+    <textarea name="mensagem" placeholder="Mensagem de teste" required></textarea>
     <button class="btn btn-primary" type="submit">Enviar teste</button>
   </form>
 </div>
@@ -130,7 +79,7 @@
           <td>{{ log.status }}</td>
           <td>{{ log.tipo }}</td>
           <td>{{ log.mensagem or "-" }}</td>
-          <td>{{ log.criado_em }}</td>
+          <td>{{ log.criado_em.strftime("%d/%m/%Y %H:%M:%S") if log.criado_em else "-" }}</td>
         </tr>
         {% else %}
         <tr>

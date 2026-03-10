@@ -20,18 +20,30 @@
     <aside class="sidebar">
       <div class="brand">
         <h2>FarmaControl</h2>
-        <p>Painel Administrativo</p>
+
+        {% if current_user.is_master %}
+          <p>Admin Geral</p>
+        {% else %}
+          <p>Painel da Farmácia</p>
+        {% endif %}
       </div>
 
       <nav class="menu">
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('clientes') }}">Clientes</a>
-        <a href="{{ url_for('entregadores') }}">Entregadores</a>
-        <a href="{{ url_for('pedidos') }}">Pedidos</a>
-        <a href="{{ url_for('whatsapp_config') }}">WhatsApp</a>
-        <a href="{{ url_for('relatorios') }}">Relatórios</a>
-        <a href="{{ url_for('entregador_login') }}" target="_blank">App Entregador</a>
-        <a href="{{ url_for('logout') }}">Sair</a>
+        {% if current_user.is_master %}
+          <a href="{{ url_for('dashboard') }}">Dashboard Geral</a>
+          <a href="{{ url_for('master_farmacias') }}">Farmácias</a>
+          <a href="{{ url_for('master_usuarios') }}">Usuários</a>
+          <a href="{{ url_for('logout') }}">Sair</a>
+        {% else %}
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('clientes') }}">Clientes</a>
+          <a href="{{ url_for('entregadores') }}">Entregadores</a>
+          <a href="{{ url_for('pedidos') }}">Pedidos</a>
+          <a href="{{ url_for('whatsapp_config') }}">WhatsApp</a>
+          <a href="{{ url_for('relatorios') }}">Relatórios</a>
+          <a href="{{ url_for('entregador_login') }}" target="_blank">App Entregador</a>
+          <a href="{{ url_for('logout') }}">Sair</a>
+        {% endif %}
       </nav>
     </aside>
     {% endif %}

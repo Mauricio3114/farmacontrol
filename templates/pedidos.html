@@ -26,16 +26,12 @@
       {% endfor %}
     </select>
 
-    <input type="text" name="valor" placeholder="Valor do pedido" required>
-
     <select name="status" required>
       <option value="recebido">Recebido</option>
       <option value="separacao">Separação</option>
       <option value="saiu_entrega">Saiu para entrega</option>
       <option value="entregue">Entregue</option>
     </select>
-
-    <textarea name="descricao" placeholder="Descrição do pedido" required></textarea>
 
     <button type="submit" class="btn btn-primary">Cadastrar Pedido</button>
   </form>
@@ -47,11 +43,10 @@
     <table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th>Pedido</th>
           <th>Cliente</th>
+          <th>Endereço</th>
           <th>Entregador</th>
-          <th>Descrição</th>
-          <th>Valor</th>
           <th>Status</th>
           <th>Rastreio</th>
           <th>WhatsApp</th>
@@ -63,9 +58,8 @@
         <tr>
           <td>#{{ pedido.id }}</td>
           <td>{{ pedido.cliente.nome }}</td>
+          <td>{{ pedido.cliente.endereco }}</td>
           <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
-          <td>{{ pedido.descricao }}</td>
-          <td>R$ {{ "%.2f"|format(pedido.valor) }}</td>
           <td>{{ pedido.status }}</td>
           <td>
             <a class="btn btn-route-google" href="{{ url_for('rastreio_cliente', codigo=pedido.codigo_rastreio) }}" target="_blank">
@@ -91,7 +85,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="9">Nenhum pedido cadastrado.</td>
+          <td colspan="8">Nenhum pedido cadastrado.</td>
         </tr>
         {% endfor %}
       </tbody>
