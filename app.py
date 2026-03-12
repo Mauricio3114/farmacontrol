@@ -906,9 +906,40 @@ def registrar_rotas(app):
 
         return jsonify({"ok": True}), 200
 
+    @app.route("/pedido/<int:pedido_id>/whatsapp-localizacao")
+    def whatsapp_cliente_localizacao(pedido_id):
+        entregador_id = session.get("entregador_id")
+        farmacia_id = session.get("entregador_farmacia_id")
+
+        if not entregador_id or not farmacia_id:
+            flash("Faça login como entregador.", "warning")
+            return redirect(url_for("entregador_login"))
+
+        pedido = Pedido.query.filter_by(
+            id=pedido_id,
+            farmacia_id=farmacia_id
+        ).first_or_404()
+
+        if pedido.entregador_id != entregador_id:
+            flash("Pedido não pertence a este entregador.", "danger")
+            return redirect(url_for("entregador_app"))
+
+        mensagem = (
+            f"Olá, {pedido.cliente.nome}! "
+            f"Sou o entregador da farmácia. "
+            f"Para facilitar a entrega do seu pedido #{pedido.id}, "
+            f"poderia enviar sua localização atual por aqui? 📍"
+        )
+
+        return redirect(link_whatsapp(pedido.cliente.telefone, mensagem))
+
     # =========================
     # APP DO ENTREGADOR
     # =========================
+    @app.route("/entregador")
+    def entregador_redirect():
+        return redirect(url_for("entregador_login"))
+
     @app.route("/entregador/login", methods=["GET", "POST"])
     def entregador_login():
         farmacias = Farmacia.query.filter_by(ativo=True, status="ativa").order_by(Farmacia.nome.asc()).all()
