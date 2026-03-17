@@ -13,22 +13,31 @@
   <h2>Novo Usuário</h2>
 
   <form method="post" class="form-grid">
+
     <input type="text" name="nome" placeholder="Nome do usuário" required>
     <input type="email" name="email" placeholder="E-mail" required>
     <input type="password" name="senha" placeholder="Senha" required>
 
-    <select name="farmacia_id" required>
-      <option value="">Selecione a farmácia</option>
-      {% for farmacia in farmacias %}
-        <option value="{{ farmacia.id }}">{{ farmacia.nome }}</option>
-      {% endfor %}
-    </select>
+    <div class="form-block">
+      <label class="muted">Farmácias que o usuário poderá acessar</label>
+
+      <div class="checkbox-grid">
+        {% for farmacia in farmacias %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="farmacias_ids" value="{{ farmacia.id }}">
+          {{ farmacia.nome }}
+        </label>
+        {% endfor %}
+      </div>
+
+    </div>
 
     <select name="perfil">
       <option value="admin">Administrador da farmácia</option>
     </select>
 
     <button type="submit" class="btn btn-primary">Cadastrar Usuário</button>
+
   </form>
 </div>
 
@@ -43,26 +52,47 @@
           <th>Nome</th>
           <th>E-mail</th>
           <th>Perfil</th>
-          <th>Farmácia</th>
+          <th>Farmácias</th>
           <th>Status</th>
         </tr>
       </thead>
+
       <tbody>
         {% for usuario in usuarios %}
         <tr>
+
           <td>#{{ usuario.id }}</td>
+
           <td>{{ usuario.nome }}</td>
+
           <td>{{ usuario.email }}</td>
+
           <td>{{ usuario.perfil }}</td>
-          <td>{{ usuario.farmacia.nome if usuario.farmacia else "-" }}</td>
+
+          <td>
+
+            {% if usuario.vinculos_farmacias %}
+              {% for vinculo in usuario.vinculos_farmacias %}
+                {{ vinculo.farmacia.nome }}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            {% else %}
+              {{ usuario.farmacia.nome if usuario.farmacia else "-" }}
+            {% endif %}
+
+          </td>
+
           <td>{{ "Ativo" if usuario.ativo else "Inativo" }}</td>
+
         </tr>
         {% else %}
+
         <tr>
           <td colspan="6">Nenhum usuário cadastrado.</td>
         </tr>
+
         {% endfor %}
       </tbody>
+
     </table>
   </div>
 </div>

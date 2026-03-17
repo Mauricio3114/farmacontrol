@@ -6,295 +6,375 @@
   <title>App do Entregador</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body class="mobile-app-body">
-  <div class="mobile-app">
-    <div class="mobile-top mobile-top-row">
-      <div>
-        <h1>Olá, {{ entregador.nome }}</h1>
-        <p>Área do entregador</p>
-      </div>
-      <a href="{{ url_for('entregador_logout') }}" class="btn btn-secondary btn-small">Sair</a>
+
+<div class="mobile-app">
+
+  <div class="mobile-top mobile-top-row">
+    <div>
+      <h1>Olá, {{ entregador.nome }}</h1>
+      <p>Área do entregador</p>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="flash-wrap">
-          {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+    <a href="{{ url_for('entregador_logout') }}" class="btn btn-secondary btn-small">
+      Sair
+    </a>
+  </div>
 
-    <div class="mobile-card">
-      <div class="panel-head-flex">
-        <div>
-          <h2>Minhas entregas</h2>
-          <p class="muted">Ao iniciar a entrega, a localização começa automaticamente</p>
-        </div>
+  {% if farmacias and farmacias|length > 1 %}
+  <div class="mobile-card">
+    <form method="get" action="{{ url_for('entregador_app') }}">
+      <label for="farmacia_id" class="muted" style="display:block; margin-bottom: 8px;">
+        Visualizar pedidos
+      </label>
+
+      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" style="width: 100%;">
+        <option value="todas" {% if exibindo_todas_farmacias %}selected{% endif %}>
+          Todas as farmácias
+        </option>
+
+        {% for farmacia in farmacias %}
+        <option value="{{ farmacia.id }}" {% if farmacia_ativa_id == farmacia.id %}selected{% endif %}>
+          {{ farmacia.nome }}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="mobile-card">
+
+    <div class="panel-head-flex">
+      <div>
+        <h2>Minhas entregas</h2>
+        <p class="muted">
+          Ao iniciar a entrega, a localização começa automaticamente
+        </p>
+      </div>
+    </div>
+
+    {% for pedido in pedidos %}
+
+    <div
+      class="pedido-mobile"
+      data-pedido-id="{{ pedido.id }}"
+      data-status="{{ pedido.status }}"
+    >
+
+      <div class="pedido-head">
+        <h3>Pedido #{{ pedido.id }}</h3>
+        <span class="status-badge status-{{ pedido.status }}">
+          {{ pedido.status }}
+        </span>
       </div>
 
-      {% for pedido in pedidos %}
-      <div class="pedido-mobile" data-pedido-id="{{ pedido.id }}" data-status="{{ pedido.status }}">
-        <div class="pedido-head">
-          <h3>Pedido #{{ pedido.id }}</h3>
-          <span class="status-badge status-{{ pedido.status }}">{{ pedido.status }}</span>
+      <p><strong>Farmácia:</strong> {{ pedido.farmacia.nome if pedido.farmacia else "-" }}</p>
+      <p><strong>Cliente:</strong> {{ pedido.cliente.nome }}</p>
+      <p><strong>Endereço:</strong> {{ pedido.cliente.endereco }}</p>
+
+      {% if pedido.descricao is defined and pedido.descricao %}
+      <p><strong>Descrição:</strong> {{ pedido.descricao }}</p>
+      {% endif %}
+
+      <div class="pedido-mobile-actions">
+
+        <button
+          class="btn btn-primary"
+          onclick="iniciarEntrega({{ pedido.id }}, this)"
+          {% if pedido.status == 'saiu_entrega' or pedido.status == 'entregue' %}disabled{% endif %}
+        >
+          {% if pedido.status == 'saiu_entrega' %}
+            Em rota
+          {% elif pedido.status == 'entregue' %}
+            Entrega iniciada
+          {% else %}
+            Iniciar entrega
+          {% endif %}
+        </button>
+
+        <div class="rotas-row">
+          <a
+            class="btn btn-route-google"
+            href="https://www.google.com/maps/dir/?api=1&destination={{ pedido.cliente.endereco | urlencode }}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Google Maps
+          </a>
+
+          <a
+            class="btn btn-route-waze"
+            href="https://waze.com/ul?q={{ pedido.cliente.endereco | urlencode }}&navigate=yes"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Waze
+          </a>
         </div>
 
-        <p><strong>Cliente:</strong> {{ pedido.cliente.nome }}</p>
-        <p><strong>Endereço:</strong> {{ pedido.cliente.endereco }}</p>
-        <p><strong>Descrição:</strong> {{ pedido.descricao }}</p>
+        <a
+          class="btn btn-warning"
+          href="{{ url_for('whatsapp_cliente_localizacao', pedido_id=pedido.id) }}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Solicitar localização
+        </a>
 
-        <div class="pedido-mobile-actions">
-          <button
-            class="btn btn-primary"
-            onclick="iniciarEntrega({{ pedido.id }}, this)"
-            {% if pedido.status == 'saiu_entrega' or pedido.status == 'entregue' %}disabled{% endif %}
-          >
-            {% if pedido.status == 'saiu_entrega' %}
-              Em rota
-            {% elif pedido.status == 'entregue' %}
-              Entrega iniciada
-            {% else %}
-              Iniciar entrega
-            {% endif %}
-          </button>
-
-          <div class="rotas-row">
-            <a
-              class="btn btn-route-google"
-              href="https://www.google.com/maps/dir/?api=1&destination={{ pedido.cliente.endereco | urlencode }}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Google Maps
-            </a>
-
-            <a
-              class="btn btn-route-waze"
-              href="https://waze.com/ul?q={{ pedido.cliente.endereco | urlencode }}&navigate=yes"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Waze
-            </a>
-          </div>
-
-          <button
-            class="btn btn-success"
-            onclick="finalizarEntrega({{ pedido.id }}, this)"
-            {% if pedido.status == 'entregue' %}disabled{% endif %}
-          >
-            {% if pedido.status == 'entregue' %}
-              Entregue
-            {% else %}
-              Finalizar entrega
-            {% endif %}
-          </button>
+        <button
+          class="btn btn-success"
+          onclick="finalizarEntrega({{ pedido.id }}, this)"
+          {% if pedido.status == 'entregue' %}disabled{% endif %}
+        >
+          {% if pedido.status == 'entregue' %}
+            Entregue
+          {% else %}
+            Finalizar entrega
+          {% endif %}
+        </button>
 
         {% if pedido.status != 'saiu_entrega' %}
-        <button class="btn btn-secondary" onclick="enviarLocalizacaoManual({{ pedido.id }})">
+        <button
+          class="btn btn-secondary"
+          onclick="enviarLocalizacaoManual({{ pedido.id }})"
+        >
           Enviar localização
         </button>
         {% endif %}
-        </div>
+
       </div>
-      {% else %}
-      <p class="muted">Nenhum pedido ativo no momento.</p>
-      {% endfor %}
     </div>
+
+    {% else %}
+
+    <p class="muted">
+      Nenhum pedido ativo no momento.
+    </p>
+
+    {% endfor %}
+
   </div>
 
-  <script>
-    let watchId = null;
-    let pedidoAtivoId = null;
+</div>
 
-    async function enviarPosicao(pedidoId, latitude, longitude) {
-      try {
-        const res = await fetch("/api/entregador/localizacao", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            latitude,
-            longitude,
-            pedido_id: pedidoId
-          })
+<script>
+let watchId = null;
+let pedidoAtivoId = null;
+
+async function enviarPosicao(pedidoId, latitude, longitude) {
+  try {
+    const res = await fetch("/api/entregador/localizacao", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        latitude,
+        longitude,
+        pedido_id: pedidoId
+      })
+    });
+
+    return await res.json();
+  } catch (e) {
+    console.error("Erro ao enviar posição:", e);
+    return { ok: false, mensagem: "Erro de conexão." };
+  }
+}
+
+function capturarPosicaoAtual() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocalização não suportada."));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude
         });
+      },
+      (erro) => reject(erro),
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  });
+}
 
-        return await res.json();
-      } catch (e) {
-        console.error("Erro ao enviar posição:", e);
-        return { ok: false, mensagem: "Erro de conexão." };
+async function iniciarEntrega(pedidoId, botao) {
+  try {
+    const res = await fetch(`/pedido/${pedidoId}/iniciar-entrega`, {
+      method: "POST"
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      alert(data.mensagem || "Erro ao iniciar entrega.");
+      return;
+    }
+
+    pedidoAtivoId = pedidoId;
+
+    try {
+      const posicao = await capturarPosicaoAtual();
+      await enviarPosicao(pedidoId, posicao.latitude, posicao.longitude);
+    } catch (erroGeo) {
+      console.error("Erro ao capturar primeira localização:", erroGeo);
+    }
+
+    iniciarMonitoramentoLocalizacao();
+
+    alert(data.mensagem);
+
+    const card = botao.closest(".pedido-mobile");
+
+    if (card) {
+      card.dataset.status = "saiu_entrega";
+
+      const badge = card.querySelector(".status-badge");
+
+      if (badge) {
+        badge.textContent = "saiu_entrega";
+        badge.className = "status-badge status-saiu_entrega";
       }
     }
 
-    function capturarPosicaoAtual() {
-      return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-          reject(new Error("Geolocalização não suportada."));
-          return;
-        }
+    botao.textContent = "Em rota";
+    botao.disabled = true;
 
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            resolve({
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude
-            });
-          },
-          (erro) => reject(erro),
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-          }
-        );
-      });
+    const escolha = confirm(
+      "Clique em OK para abrir no Google Maps.\nClique em Cancelar para abrir no Waze."
+    );
+
+    if (escolha) {
+      window.open(data.google_maps_url, "_blank");
+    } else {
+      window.open(data.waze_url, "_blank");
     }
 
-    async function iniciarEntrega(pedidoId, botao) {
-      try {
-        const res = await fetch(`/pedido/${pedidoId}/iniciar-entrega`, {
-          method: "POST"
-        });
-        const data = await res.json();
+  } catch (e) {
+    alert("Erro ao iniciar entrega.");
+    console.error(e);
+  }
+}
 
-        if (!data.ok) {
-          alert(data.mensagem || "Erro ao iniciar entrega.");
-          return;
-        }
+async function finalizarEntrega(pedidoId, botao) {
+  try {
+    const res = await fetch(`/pedido/${pedidoId}/finalizar-entrega`, {
+      method: "POST"
+    });
 
-        pedidoAtivoId = pedidoId;
+    const data = await res.json();
 
-        try {
-          const posicao = await capturarPosicaoAtual();
-          await enviarPosicao(pedidoId, posicao.latitude, posicao.longitude);
-        } catch (erroGeo) {
-          console.error("Erro ao capturar primeira localização:", erroGeo);
-        }
+    alert(data.mensagem);
 
-        iniciarMonitoramentoLocalizacao();
-
-        alert(data.mensagem);
-
-        const card = botao.closest(".pedido-mobile");
-        if (card) {
-          card.dataset.status = "saiu_entrega";
-
-          const badge = card.querySelector(".status-badge");
-          if (badge) {
-            badge.textContent = "saiu_entrega";
-            badge.className = "status-badge status-saiu_entrega";
-          }
-        }
-
-        botao.textContent = "Em rota";
-        botao.disabled = true;
-
-        const escolha = confirm(
-          "Clique em OK para abrir no Google Maps.\nClique em Cancelar para abrir no Waze."
-        );
-
-        if (escolha) {
-          window.open(data.google_maps_url, "_blank");
-        } else {
-          window.open(data.waze_url, "_blank");
-        }
-
-      } catch (e) {
-        alert("Erro ao iniciar entrega.");
-        console.error(e);
-      }
-    }
-
-    async function finalizarEntrega(pedidoId, botao) {
-      try {
-        const res = await fetch(`/pedido/${pedidoId}/finalizar-entrega`, {
-          method: "POST"
-        });
-        const data = await res.json();
-
-        alert(data.mensagem);
-
-        if (data.ok) {
-          if (pedidoAtivoId === pedidoId) {
-            pararMonitoramentoLocalizacao();
-            pedidoAtivoId = null;
-          }
-
-          const card = botao.closest(".pedido-mobile");
-          if (card) {
-            card.dataset.status = "entregue";
-
-            const badge = card.querySelector(".status-badge");
-            if (badge) {
-              badge.textContent = "entregue";
-              badge.className = "status-badge status-entregue";
-            }
-
-            const iniciarBtn = card.querySelector(".btn-primary");
-            if (iniciarBtn) {
-              iniciarBtn.textContent = "Entrega iniciada";
-              iniciarBtn.disabled = true;
-            }
-          }
-
-          botao.textContent = "Entregue";
-          botao.disabled = true;
-        }
-      } catch (e) {
-        alert("Erro ao finalizar entrega.");
-        console.error(e);
-      }
-    }
-
-    async function enviarLocalizacaoManual(pedidoId) {
-      try {
-        const posicao = await capturarPosicaoAtual();
-        const data = await enviarPosicao(pedidoId, posicao.latitude, posicao.longitude);
-        alert(data.mensagem || "Localização enviada com sucesso.");
-      } catch (erro) {
-        alert("Não foi possível capturar a localização.");
-        console.error(erro);
-      }
-    }
-
-    function iniciarMonitoramentoLocalizacao() {
-      if (!navigator.geolocation) {
-        alert("Geolocalização não suportada neste aparelho.");
-        return;
+    if (data.ok) {
+      if (pedidoAtivoId === pedidoId) {
+        pararMonitoramentoLocalizacao();
+        pedidoAtivoId = null;
       }
 
-      if (watchId !== null) return;
+      const card = botao.closest(".pedido-mobile");
 
-      watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
-          if (!pedidoAtivoId) return;
+      if (card) {
+        card.dataset.status = "entregue";
 
-          const latitude = pos.coords.latitude;
-          const longitude = pos.coords.longitude;
+        const badge = card.querySelector(".status-badge");
 
-          await enviarPosicao(pedidoAtivoId, latitude, longitude);
-        },
-        (erro) => {
-          console.error("Erro no monitoramento:", erro);
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5000,
-          timeout: 10000
+        if (badge) {
+          badge.textContent = "entregue";
+          badge.className = "status-badge status-entregue";
         }
-      );
+
+        const iniciarBtn = card.querySelector(".btn-primary");
+
+        if (iniciarBtn) {
+          iniciarBtn.textContent = "Entrega iniciada";
+          iniciarBtn.disabled = true;
+        }
+      }
+
+      botao.textContent = "Entregue";
+      botao.disabled = true;
     }
 
-    function pararMonitoramentoLocalizacao() {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
+  } catch (e) {
+    alert("Erro ao finalizar entrega.");
+    console.error(e);
+  }
+}
+
+async function enviarLocalizacaoManual(pedidoId) {
+  try {
+    const posicao = await capturarPosicaoAtual();
+
+    const data = await enviarPosicao(
+      pedidoId,
+      posicao.latitude,
+      posicao.longitude
+    );
+
+    alert(data.mensagem || "Localização enviada com sucesso.");
+
+  } catch (erro) {
+    alert("Não foi possível capturar a localização.");
+    console.error(erro);
+  }
+}
+
+function iniciarMonitoramentoLocalizacao() {
+  if (!navigator.geolocation) {
+    alert("Geolocalização não suportada neste aparelho.");
+    return;
+  }
+
+  if (watchId !== null) return;
+
+  watchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      if (!pedidoAtivoId) return;
+
+      const latitude = pos.coords.latitude;
+      const longitude = pos.coords.longitude;
+
+      await enviarPosicao(pedidoAtivoId, latitude, longitude);
+    },
+    (erro) => {
+      console.error("Erro no monitoramento:", erro);
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 10000
     }
-  </script>
+  );
+}
+
+function pararMonitoramentoLocalizacao() {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+</script>
+
 </body>
 </html>

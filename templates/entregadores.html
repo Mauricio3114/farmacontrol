@@ -11,10 +11,25 @@
 
 <div class="panel">
   <h2>Novo Entregador</h2>
+
   <form method="post" class="form-grid">
     <input type="text" name="nome" placeholder="Nome do entregador" required>
     <input type="text" name="telefone" placeholder="Telefone" required>
     <input type="password" name="senha" placeholder="Senha do entregador" required>
+
+    <div class="form-block">
+      <label class="muted">Farmácias que o entregador poderá atender</label>
+
+      <div class="checkbox-grid">
+        {% for farmacia in farmacias_usuario %}
+        <label class="checkbox-item">
+          <input type="checkbox" name="farmacias_ids" value="{{ farmacia.id }}">
+          {{ farmacia.nome }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
     <button type="submit" class="btn btn-primary">Cadastrar Entregador</button>
   </form>
 </div>
@@ -39,6 +54,7 @@
           <th>ID</th>
           <th>Nome</th>
           <th>Telefone</th>
+          <th>Farmácias</th>
           <th>Status</th>
           <th>Login</th>
         </tr>
@@ -49,12 +65,21 @@
           <td>#{{ entregador.id }}</td>
           <td>{{ entregador.nome }}</td>
           <td>{{ entregador.telefone }}</td>
+          <td>
+            {% if entregador.vinculos_farmacias %}
+              {% for vinculo in entregador.vinculos_farmacias if vinculo.ativo %}
+                {{ vinculo.farmacia.nome }}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            {% else %}
+              {{ entregador.farmacia.nome if entregador.farmacia else "-" }}
+            {% endif %}
+          </td>
           <td>{{ "Ativo" if entregador.ativo else "Inativo" }}</td>
           <td><span class="tag">{{ entregador.telefone }}</span></td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="5">Nenhum entregador cadastrado.</td>
+          <td colspan="6">Nenhum entregador cadastrado.</td>
         </tr>
         {% endfor %}
       </tbody>

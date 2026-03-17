@@ -7,11 +7,36 @@
     <h1>Dashboard</h1>
     <p class="muted">
       Controle geral da farmácia e das entregas
-      {% if farmacia %}
+      {% if exibindo_todas_farmacias %}
+        • Todas as farmácias
+      {% elif farmacia %}
         • {{ farmacia.nome }}
       {% endif %}
     </p>
   </div>
+
+  {% if farmacias_usuario and farmacias_usuario|length > 1 %}
+  <div>
+    <form method="get" action="{{ url_for('dashboard') }}">
+      <label for="farmacia_id" class="muted" style="display:block; margin-bottom: 6px;">
+        Visualizar dashboard
+      </label>
+      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" style="min-width: 220px;">
+        <option value="todas" {% if exibindo_todas_farmacias %}selected{% endif %}>
+          Todas as farmácias
+        </option>
+        {% for farmacia_item in farmacias_usuario %}
+        <option
+          value="{{ farmacia_item.id }}"
+          {% if farmacia_ativa_id == farmacia_item.id %}selected{% endif %}
+        >
+          {{ farmacia_item.nome }}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+  {% endif %}
 </div>
 
 <div class="cards-grid">
@@ -65,6 +90,7 @@
       <thead>
         <tr>
           <th>Pedido</th>
+          <th>Farmácia</th>
           <th>Cliente</th>
           <th>Endereço</th>
           <th>Entregador</th>
@@ -75,6 +101,7 @@
         {% for pedido in ultimos_pedidos %}
         <tr>
           <td>#{{ pedido.id }}</td>
+          <td>{{ pedido.farmacia.nome if pedido.farmacia else "-" }}</td>
           <td>{{ pedido.cliente.nome }}</td>
           <td>{{ pedido.cliente.endereco }}</td>
           <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
@@ -82,7 +109,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="5">Nenhum pedido cadastrado.</td>
+          <td colspan="6">Nenhum pedido cadastrado.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -98,14 +125,15 @@ console.log("SCRIPT DASHBOARD CARREGOU");
 let mapa = null;
 let camadaMarcadores = null;
 let marcadores = {};
+let mapaJaAjustouZoom = false;
 
-function criarIconeOnline() {
+function criarIconeOnline(cor="#22c55e") {
   return L.divIcon({
     className: "",
     html: `
       <div class="marker-wrap">
-        <div class="marker-ping"></div>
-        <div class="marker-core online"></div>
+        <div class="marker-ping" style="background:${cor};"></div>
+        <div class="marker-core online" style="background:${cor}; border: 2px solid #fff;"></div>
       </div>
     `,
     iconSize: [24, 24],
@@ -113,12 +141,12 @@ function criarIconeOnline() {
   });
 }
 
-function criarIconeOffline() {
+function criarIconeOffline(cor="#64748b") {
   return L.divIcon({
     className: "",
     html: `
       <div class="marker-wrap">
-        <div class="marker-core offline"></div>
+        <div class="marker-core offline" style="background:${cor}; border: 2px solid #fff;"></div>
       </div>
     `,
     iconSize: [20, 20],
@@ -146,6 +174,63 @@ function animarMarcador(marker, destino, duracao = 1200) {
   requestAnimationFrame(passo);
 }
 
+function montarPopup(item) {
+  const statusTexto = item.online ? "Online" : "Offline";
+
+  return `
+    <div style="min-width:240px;">
+      <div style="font-size:15px; font-weight:700; margin-bottom:6px;">
+        🛵 ${item.nome}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Farmácia:</strong> ${item.farmacia_nome || "-"}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Telefone:</strong> ${item.telefone || "-"}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Status entregador:</strong> ${statusTexto}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Última atualização:</strong> ${item.data_hora || "-"}
+      </div>
+
+      <hr style="border:none; border-top:1px solid #ddd; margin:8px 0;">
+
+      <div style="margin-bottom:4px;">
+        <strong>Pedido:</strong> ${item.pedido_id ? "#" + item.pedido_id : "Sem pedido ativo"}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Status pedido:</strong> ${item.pedido_status || "-"}
+      </div>
+
+      <div style="margin-bottom:4px;">
+        <strong>Cliente:</strong> ${item.cliente_nome || "-"}
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <strong>Endereço:</strong> ${item.cliente_endereco || "-"}
+      </div>
+
+      ${
+        item.cliente_endereco
+          ? `<a
+               href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.cliente_endereco)}"
+               target="_blank"
+               rel="noopener noreferrer"
+               style="display:inline-block;padding:8px 12px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:600;"
+             >Abrir rota</a>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 async function carregarMapaEntregadores() {
   console.log("ATUALIZANDO MAPA...");
 
@@ -170,6 +255,7 @@ async function carregarMapaEntregadores() {
     console.log("DADOS MAPA:", data);
 
     const idsAtuais = new Set();
+    const bounds = [];
 
     data.forEach(item => {
       const lat = parseFloat(item.latitude);
@@ -177,18 +263,12 @@ async function carregarMapaEntregadores() {
 
       if (isNaN(lat) || isNaN(lng)) return;
 
+      bounds.push([lat, lng]);
       idsAtuais.add(String(item.id));
 
-      const icone = item.online ? criarIconeOnline() : criarIconeOffline();
-      const statusTexto = item.online ? "Online" : "Offline";
-
-      const popupHtml = `
-        <strong>${item.nome}</strong><br>
-        ${item.telefone}<br>
-        Status: <strong>${statusTexto}</strong><br>
-        Última atualização: ${item.data_hora}<br>
-        ${item.pedido_id ? `Pedido: #${item.pedido_id}` : "Sem pedido ativo"}
-      `;
+      const cor = item.cor || "#22c55e";
+      const icone = item.online ? criarIconeOnline(cor) : criarIconeOffline(cor);
+      const popupHtml = montarPopup(item);
 
       if (marcadores[item.id]) {
         const marker = marcadores[item.id];
@@ -208,6 +288,14 @@ async function carregarMapaEntregadores() {
         delete marcadores[id];
       }
     });
+
+    if (bounds.length === 1) {
+      mapa.setView(bounds[0], 15);
+    }
+
+    if (bounds.length > 1) {
+      mapa.fitBounds(bounds, { padding: [40, 40] });
+    }
 
   } catch (e) {
     console.error("Erro ao carregar entregadores no mapa:", e);

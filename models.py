@@ -14,6 +14,25 @@ def agora_brasil():
         return datetime.now()
 
 
+class UsuarioFarmacia(db.Model):
+    __tablename__ = "usuarios_farmacias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=False)
+
+    perfil = db.Column(db.String(20), nullable=False, default="admin")
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    usuario = db.relationship("User", back_populates="vinculos_farmacias")
+    farmacia = db.relationship("Farmacia", back_populates="usuarios_vinculados")
+
+    __table_args__ = (
+        db.UniqueConstraint("usuario_id", "farmacia_id", name="uq_usuario_farmacia"),
+    )
+
+
 class Farmacia(db.Model):
     __tablename__ = "farmacias"
 
@@ -29,7 +48,17 @@ class Farmacia(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
 
+    # RELAÇÃO LEGADA: pode manter por enquanto para não quebrar telas antigas
     usuarios = db.relationship("User", backref="farmacia", lazy=True)
+
+    # NOVA RELAÇÃO: usuário pode estar vinculado a várias farmácias
+    usuarios_vinculados = db.relationship(
+        "UsuarioFarmacia",
+        back_populates="farmacia",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
     clientes = db.relationship("Cliente", backref="farmacia", lazy=True)
     entregadores = db.relationship("Entregador", backref="farmacia", lazy=True)
     pedidos = db.relationship("Pedido", backref="farmacia", lazy=True)
@@ -50,9 +79,19 @@ class User(UserMixin, db.Model):
     # admin = admin da farmácia
     perfil = db.Column(db.String(20), nullable=False, default="admin")
 
+    # CAMPO LEGADO
+    # manter por enquanto para não quebrar o que já existe
     farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=True)
+
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    vinculos_farmacias = db.relationship(
+        "UsuarioFarmacia",
+        back_populates="usuario",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
 
     def set_password(self, senha):
         self.senha_hash = generate_password_hash(senha)
@@ -63,6 +102,42 @@ class User(UserMixin, db.Model):
     @property
     def is_master(self):
         return self.perfil == "master"
+
+    @property
+    def farmacias_ids(self):
+        """
+        Retorna os ids das farmácias que o usuário pode acessar.
+        Para master, isso será tratado nas rotas.
+        """
+        ids = [
+            vinculo.farmacia_id
+            for vinculo in self.vinculos_farmacias
+            if vinculo.ativo
+        ]
+
+        # compatibilidade com estrutura antiga
+        if not ids and self.farmacia_id:
+            ids = [self.farmacia_id]
+
+        return ids
+
+    @property
+    def farmacia_principal_id(self):
+        """
+        Útil para telas antigas que ainda esperam uma única farmácia.
+        """
+        if self.farmacia_id:
+            return self.farmacia_id
+
+        if self.farmacias_ids:
+            return self.farmacias_ids[0]
+
+        return None
+
+    def possui_acesso_farmacia(self, farmacia_id):
+        if self.is_master:
+            return True
+        return farmacia_id in self.farmacias_ids
 
 
 @login_manager.user_loader
@@ -84,11 +159,30 @@ class Cliente(db.Model):
     pedidos = db.relationship("Pedido", backref="cliente", lazy=True)
 
 
+class EntregadorFarmacia(db.Model):
+    __tablename__ = "entregadores_farmacias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entregador_id = db.Column(db.Integer, db.ForeignKey("entregadores.id"), nullable=False)
+    farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=False)
+    ativo = db.Column(db.Boolean, default=True)
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+
+    entregador = db.relationship("Entregador", back_populates="vinculos_farmacias")
+    farmacia = db.relationship("Farmacia")
+
+    __table_args__ = (
+        db.UniqueConstraint("entregador_id", "farmacia_id", name="uq_entregador_farmacia"),
+    )
+
+
 class Entregador(db.Model):
     __tablename__ = "entregadores"
 
     id = db.Column(db.Integer, primary_key=True)
-    farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=False)
+
+    # legado / compatibilidade
+    farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=True)
 
     nome = db.Column(db.String(150), nullable=False)
     telefone = db.Column(db.String(30), nullable=False)
@@ -99,8 +193,15 @@ class Entregador(db.Model):
     pedidos = db.relationship("Pedido", backref="entregador", lazy=True)
     localizacoes = db.relationship("Localizacao", backref="entregador", lazy=True)
 
+    vinculos_farmacias = db.relationship(
+        "EntregadorFarmacia",
+        back_populates="entregador",
+        cascade="all, delete-orphan",
+        lazy=True
+    )
+
     __table_args__ = (
-        db.UniqueConstraint("farmacia_id", "telefone", name="uq_entregador_telefone_farmacia"),
+        db.UniqueConstraint("telefone", name="uq_entregador_telefone_global"),
     )
 
     def set_password(self, senha):
@@ -108,6 +209,22 @@ class Entregador(db.Model):
 
     def check_password(self, senha):
         return check_password_hash(self.senha_hash, senha)
+
+    @property
+    def farmacias_ids(self):
+        ids = [
+            vinculo.farmacia_id
+            for vinculo in self.vinculos_farmacias
+            if vinculo.ativo
+        ]
+
+        if not ids and self.farmacia_id:
+            ids = [self.farmacia_id]
+
+        return ids
+
+    def possui_acesso_farmacia(self, farmacia_id):
+        return farmacia_id in self.farmacias_ids
 
 
 class Pedido(db.Model):

@@ -22,9 +22,10 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 from extensions import db, login_manager
+
 from models import (
     Farmacia, User, Cliente, Entregador, Pedido, Localizacao,
-    WhatsAppConfig, WhatsAppLog
+    WhatsAppConfig, WhatsAppLog, UsuarioFarmacia, EntregadorFarmacia
 )
 
 
@@ -60,6 +61,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         criar_admin_master_padrao()
+        migrar_usuarios_legados_para_vinculos()
+        migrar_entregadores_legados_para_vinculos()
         garantir_codigo_rastreio_nos_pedidos()
 
     registrar_rotas(app)
@@ -81,6 +84,81 @@ def criar_admin_master_padrao():
         db.session.add(admin)
         db.session.commit()
 
+
+def migrar_entregadores_legados_para_vinculos():
+    entregadores = Entregador.query.all()
+    alterou = False
+
+    for entregador in entregadores:
+        if entregador.farmacia_id:
+            existe = EntregadorFarmacia.query.filter_by(
+                entregador_id=entregador.id,
+                farmacia_id=entregador.farmacia_id
+            ).first()
+
+            if not existe:
+                vinculo = EntregadorFarmacia(
+                    entregador_id=entregador.id,
+                    farmacia_id=entregador.farmacia_id,
+                    ativo=True
+                )
+                db.session.add(vinculo)
+                alterou = True
+
+    if alterou:
+        db.session.commit()
+
+
+def migrar_usuarios_legados_para_vinculos():
+    """
+    Cria vínculos em usuarios_farmacias para usuários antigos que ainda só têm farmacia_id.
+    """
+    usuarios = User.query.filter(User.perfil != "master").all()
+    alterou = False
+
+    for usuario in usuarios:
+        if usuario.farmacia_id:
+            existe = UsuarioFarmacia.query.filter_by(
+                usuario_id=usuario.id,
+                farmacia_id=usuario.farmacia_id
+            ).first()
+
+            if not existe:
+                vinculo = UsuarioFarmacia(
+                    usuario_id=usuario.id,
+                    farmacia_id=usuario.farmacia_id,
+                    perfil="admin",
+                    ativo=True
+                )
+                db.session.add(vinculo)
+                alterou = True
+
+    if alterou:
+        db.session.commit()
+
+
+def migrar_entregadores_legados_para_vinculos():
+    entregadores = Entregador.query.all()
+    alterou = False
+
+    for entregador in entregadores:
+        if entregador.farmacia_id:
+            existe = EntregadorFarmacia.query.filter_by(
+                entregador_id=entregador.id,
+                farmacia_id=entregador.farmacia_id
+            ).first()
+
+            if not existe:
+                vinculo = EntregadorFarmacia(
+                    entregador_id=entregador.id,
+                    farmacia_id=entregador.farmacia_id,
+                    ativo=True
+                )
+                db.session.add(vinculo)
+                alterou = True
+
+    if alterou:
+        db.session.commit()
 
 def garantir_codigo_rastreio_nos_pedidos():
     pedidos = Pedido.query.filter(
@@ -131,40 +209,121 @@ def master_required(view_func):
     return wrapper
 
 
+def farmacias_ids_do_usuario():
+    if not current_user.is_authenticated:
+        return []
+
+    if current_user.is_master:
+        return [
+            f.id for f in Farmacia.query.filter_by(ativo=True, status="ativa").all()
+        ]
+
+    ids = list(current_user.farmacias_ids or [])
+
+    if not ids and current_user.farmacia_id:
+        ids = [current_user.farmacia_id]
+
+    if not ids:
+        return []
+
+    farmacias_validas = Farmacia.query.filter(
+        Farmacia.id.in_(ids),
+        Farmacia.ativo.is_(True),
+        Farmacia.status == "ativa"
+    ).all()
+
+    return [f.id for f in farmacias_validas]
+
+
+def farmacias_do_usuario_logado():
+    ids = farmacias_ids_do_usuario()
+    if not ids:
+        return []
+
+    return Farmacia.query.filter(Farmacia.id.in_(ids)).order_by(Farmacia.nome.asc()).all()
+
+
+def farmacia_ativa_id():
+    if not current_user.is_authenticated or current_user.is_master:
+        return None
+
+    ids = farmacias_ids_do_usuario()
+    if not ids:
+        return None
+
+    farmacia_id_sessao = session.get("farmacia_ativa_id")
+    if farmacia_id_sessao in ids:
+        return farmacia_id_sessao
+
+    session["farmacia_ativa_id"] = ids[0]
+    return ids[0]
+
+
+def definir_farmacia_ativa(farmacia_id):
+    if not current_user.is_authenticated or current_user.is_master:
+        return False
+
+    ids = farmacias_ids_do_usuario()
+    if farmacia_id in ids:
+        session["farmacia_ativa_id"] = farmacia_id
+        return True
+    return False
+
+
 def user_farmacia_id():
     if current_user.is_master:
         return None
-    return current_user.farmacia_id
+    return farmacia_ativa_id()
 
 
 def validar_acesso_farmacia(farmacia_id):
     if current_user.is_master:
         return True
-    return current_user.farmacia_id == farmacia_id
+    return current_user.possui_acesso_farmacia(farmacia_id)
 
 
 def cliente_query():
     if current_user.is_master:
         return Cliente.query
-    return Cliente.query.filter_by(farmacia_id=current_user.farmacia_id)
+
+    farmacia_id = farmacia_ativa_id()
+    if not farmacia_id:
+        return Cliente.query.filter(Cliente.id == 0)
+
+    return Cliente.query.filter_by(farmacia_id=farmacia_id)
 
 
 def entregador_query():
     if current_user.is_master:
         return Entregador.query
-    return Entregador.query.filter_by(farmacia_id=current_user.farmacia_id)
+
+    farmacia_id = farmacia_ativa_id()
+    if not farmacia_id:
+        return Entregador.query.filter(Entregador.id == 0)
+
+    return Entregador.query.filter_by(farmacia_id=farmacia_id)
 
 
 def pedido_query():
     if current_user.is_master:
         return Pedido.query
-    return Pedido.query.filter_by(farmacia_id=current_user.farmacia_id)
+
+    ids = farmacias_ids_do_usuario()
+    if not ids:
+        return Pedido.query.filter(Pedido.id == 0)
+
+    return Pedido.query.filter(Pedido.farmacia_id.in_(ids))
 
 
 def farmacia_do_usuario_logado():
-    if current_user.is_master or not current_user.farmacia_id:
+    if current_user.is_master:
         return None
-    return db.session.get(Farmacia, current_user.farmacia_id)
+
+    farmacia_id = farmacia_ativa_id()
+    if not farmacia_id:
+        return None
+
+    return db.session.get(Farmacia, farmacia_id)
 
 
 def link_google_maps(endereco: str) -> str:
@@ -378,17 +537,35 @@ def registrar_rotas(app):
 
             user = User.query.filter_by(email=email, ativo=True).first()
             if user and user.check_password(senha):
-                if not user.is_master and not user.farmacia_id:
-                    flash("Usuário sem farmácia vinculada.", "danger")
-                    return redirect(url_for("login"))
-
                 if not user.is_master:
-                    farmacia = db.session.get(Farmacia, user.farmacia_id)
-                    if not farmacia or not farmacia.ativo or farmacia.status != "ativa":
-                        flash("Farmácia inativa ou bloqueada.", "danger")
+                    ids = []
+                    if hasattr(user, "farmacias_ids"):
+                        ids = list(user.farmacias_ids or [])
+
+                    if not ids and user.farmacia_id:
+                        ids = [user.farmacia_id]
+
+                    if not ids:
+                        flash("Usuário sem farmácia vinculada.", "danger")
+                        return redirect(url_for("login"))
+
+                    farmacias_ativas = Farmacia.query.filter(
+                        Farmacia.id.in_(ids),
+                        Farmacia.ativo.is_(True),
+                        Farmacia.status == "ativa"
+                    ).all()
+
+                    if not farmacias_ativas:
+                        flash("Nenhuma farmácia ativa vinculada a este usuário.", "danger")
                         return redirect(url_for("login"))
 
                 login_user(user)
+
+                if not user.is_master:
+                    ids = farmacias_ids_do_usuario()
+                    if ids:
+                        session["farmacia_ativa_id"] = ids[0]
+
                 flash("Login realizado com sucesso.", "success")
                 return redirect(url_for("dashboard"))
 
@@ -400,6 +577,7 @@ def registrar_rotas(app):
     @login_required
     def logout():
         logout_user()
+        session.pop("farmacia_ativa_id", None)
         session.pop("entregador_id", None)
         session.pop("entregador_farmacia_id", None)
         return redirect(url_for("login"))
@@ -426,32 +604,83 @@ def registrar_rotas(app):
                 farmacias=Farmacia.query.order_by(Farmacia.id.desc()).limit(10).all()
             )
 
-        total_clientes = Cliente.query.filter_by(farmacia_id=current_user.farmacia_id).count()
-        total_entregadores = Entregador.query.filter_by(farmacia_id=current_user.farmacia_id).count()
-        total_pedidos = Pedido.query.filter_by(farmacia_id=current_user.farmacia_id).count()
+        farmacias_usuario = farmacias_do_usuario_logado()
+        ids = [f.id for f in farmacias_usuario]
 
-        pedidos_recebidos = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id, status="recebido"
+        if not ids:
+            flash("Nenhuma farmácia ativa vinculada ao seu login.", "danger")
+            return redirect(url_for("logout"))
+
+        farmacia_param = request.args.get("farmacia_id", "").strip()
+
+        if len(ids) == 1:
+            session["farmacia_ativa_id"] = ids[0]
+            farmacia_id_filtrada = ids[0]
+        else:
+            if farmacia_param.lower() == "todas":
+                session.pop("farmacia_ativa_id", None)
+                farmacia_id_filtrada = None
+            elif farmacia_param:
+                try:
+                    farmacia_id_teste = int(farmacia_param)
+                    if farmacia_id_teste in ids:
+                        session["farmacia_ativa_id"] = farmacia_id_teste
+                        farmacia_id_filtrada = farmacia_id_teste
+                    else:
+                        farmacia_id_filtrada = session.get("farmacia_ativa_id")
+                except ValueError:
+                    farmacia_id_filtrada = session.get("farmacia_ativa_id")
+            else:
+                farmacia_id_filtrada = session.get("farmacia_ativa_id")
+
+        if farmacia_id_filtrada and farmacia_id_filtrada not in ids:
+            farmacia_id_filtrada = ids[0]
+            session["farmacia_ativa_id"] = farmacia_id_filtrada
+
+        if farmacia_id_filtrada:
+            ids_consulta = [farmacia_id_filtrada]
+            farmacia = db.session.get(Farmacia, farmacia_id_filtrada)
+        else:
+            ids_consulta = ids
+            farmacia = None
+
+        total_clientes = Cliente.query.filter(Cliente.farmacia_id.in_(ids_consulta)).count()
+        total_entregadores = Entregador.query.filter(
+            Entregador.farmacia_id.in_(ids_consulta),
+            Entregador.ativo.is_(True)
         ).count()
-        pedidos_separacao = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id, status="separacao"
-        ).count()
-        pedidos_entrega = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id, status="saiu_entrega"
-        ).count()
-        pedidos_entregues = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id, status="entregue"
+        total_pedidos = Pedido.query.filter(Pedido.farmacia_id.in_(ids_consulta)).count()
+
+        pedidos_recebidos = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "recebido"
         ).count()
 
-        ultimos_pedidos = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id
+        pedidos_separacao = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "separacao"
+        ).count()
+
+        pedidos_entrega = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "saiu_entrega"
+        ).count()
+
+        pedidos_entregues = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "entregue"
+        ).count()
+
+        ultimos_pedidos = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta)
         ).order_by(Pedido.id.desc()).limit(10).all()
-
-        farmacia = farmacia_do_usuario_logado()
 
         return render_template(
             "dashboard.html",
             farmacia=farmacia,
+            farmacias_usuario=farmacias_usuario,
+            farmacia_ativa_id=farmacia_id_filtrada,
+            exibindo_todas_farmacias=(farmacia_id_filtrada is None and len(ids) > 1),
             total_clientes=total_clientes,
             total_entregadores=total_entregadores,
             total_pedidos=total_pedidos,
@@ -534,43 +763,63 @@ def registrar_rotas(app):
     @login_required
     @master_required
     def master_usuarios():
+
         if request.method == "POST":
+
             nome = request.form.get("nome", "").strip()
             email = request.form.get("email", "").strip()
             senha = request.form.get("senha", "").strip()
-            farmacia_id = request.form.get("farmacia_id", "").strip()
             perfil = request.form.get("perfil", "admin").strip()
 
-            if not nome or not email or not senha or not farmacia_id:
-                flash("Preencha nome, e-mail, senha e farmácia.", "warning")
+            farmacias_ids = request.form.getlist("farmacias_ids")
+
+            if not nome or not email or not senha:
+                flash("Preencha nome, e-mail e senha.", "warning")
+                return redirect(url_for("master_usuarios"))
+
+            if not farmacias_ids:
+                flash("Selecione pelo menos uma farmácia.", "warning")
                 return redirect(url_for("master_usuarios"))
 
             if User.query.filter_by(email=email).first():
                 flash("Já existe usuário com esse e-mail.", "danger")
                 return redirect(url_for("master_usuarios"))
 
-            farmacia = db.session.get(Farmacia, int(farmacia_id))
-            if not farmacia:
-                flash("Farmácia inválida.", "danger")
-                return redirect(url_for("master_usuarios"))
+            primeira_farmacia_id = int(farmacias_ids[0])
 
             novo = User(
                 nome=nome,
                 email=email,
-                perfil=perfil if perfil in ["admin"] else "admin",
-                farmacia_id=farmacia.id,
+                perfil="admin",
+                farmacia_id=primeira_farmacia_id,
                 ativo=True
             )
+
             novo.set_password(senha)
 
             db.session.add(novo)
+            db.session.flush()
+
+            for fid in farmacias_ids:
+                farmacia = db.session.get(Farmacia, int(fid))
+
+                if farmacia:
+                    vinculo = UsuarioFarmacia(
+                        usuario_id=novo.id,
+                        farmacia_id=farmacia.id,
+                        perfil="admin",
+                        ativo=True
+                    )
+                    db.session.add(vinculo)
+
             db.session.commit()
 
-            flash("Usuário da farmácia cadastrado com sucesso.", "success")
+            flash("Usuário cadastrado com acesso às farmácias selecionadas.", "success")
             return redirect(url_for("master_usuarios"))
 
         usuarios = User.query.filter(User.perfil != "master").order_by(User.id.desc()).all()
         farmacias = Farmacia.query.filter_by(ativo=True).order_by(Farmacia.nome.asc()).all()
+
         return render_template(
             "master_usuarios.html",
             usuarios=usuarios,
@@ -587,6 +836,11 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            flash("Nenhuma farmácia ativa selecionada.", "warning")
+            return redirect(url_for("dashboard"))
+
         if request.method == "POST":
             nome = request.form.get("nome", "").strip()
             telefone = request.form.get("telefone", "").strip()
@@ -597,7 +851,7 @@ def registrar_rotas(app):
                 return redirect(url_for("clientes"))
 
             novo = Cliente(
-                farmacia_id=current_user.farmacia_id,
+                farmacia_id=farmacia_id,
                 nome=nome,
                 telefone=telefone,
                 endereco=endereco
@@ -608,7 +862,7 @@ def registrar_rotas(app):
             return redirect(url_for("clientes"))
 
         lista = Cliente.query.filter_by(
-            farmacia_id=current_user.farmacia_id
+            farmacia_id=farmacia_id
         ).order_by(Cliente.id.desc()).all()
 
         return render_template("clientes.html", clientes=lista)
@@ -623,26 +877,77 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacias_usuario = farmacias_do_usuario_logado()
+        farmacias_permitidas_ids = [f.id for f in farmacias_usuario]
+
+        if not farmacias_permitidas_ids:
+            flash("Nenhuma farmácia disponível para este usuário.", "warning")
+            return redirect(url_for("dashboard"))
+
         if request.method == "POST":
             nome = request.form.get("nome", "").strip()
             telefone = request.form.get("telefone", "").strip()
             senha = request.form.get("senha", "").strip()
+            farmacias_ids = request.form.getlist("farmacias_ids")
 
             if not nome or not telefone or not senha:
                 flash("Preencha todos os campos do entregador.", "warning")
                 return redirect(url_for("entregadores"))
 
-            existe = Entregador.query.filter_by(
-                farmacia_id=current_user.farmacia_id,
+            if not farmacias_ids:
+                flash("Selecione pelo menos uma farmácia.", "warning")
+                return redirect(url_for("entregadores"))
+
+            farmacias_ids = [int(fid) for fid in farmacias_ids if fid.isdigit()]
+            farmacias_ids = [fid for fid in farmacias_ids if fid in farmacias_permitidas_ids]
+
+            if not farmacias_ids:
+                flash("Nenhuma farmácia válida foi selecionada.", "danger")
+                return redirect(url_for("entregadores"))
+
+            entregador_existente = Entregador.query.filter_by(
                 telefone=telefone
             ).first()
 
-            if existe:
-                flash("Já existe entregador com esse telefone nesta farmácia.", "danger")
+            if entregador_existente:
+                if not entregador_existente.check_password(senha):
+                    flash("Já existe entregador com esse telefone, mas a senha informada é diferente.", "danger")
+                    return redirect(url_for("entregadores"))
+
+                if nome:
+                    entregador_existente.nome = nome
+
+                if not entregador_existente.farmacia_id:
+                    entregador_existente.farmacia_id = farmacias_ids[0]
+
+                adicionou = False
+
+                for farmacia_id in farmacias_ids:
+                    vinculo_existente = EntregadorFarmacia.query.filter_by(
+                        entregador_id=entregador_existente.id,
+                        farmacia_id=farmacia_id
+                    ).first()
+
+                    if not vinculo_existente:
+                        vinculo = EntregadorFarmacia(
+                            entregador_id=entregador_existente.id,
+                            farmacia_id=farmacia_id,
+                            ativo=True
+                        )
+                        db.session.add(vinculo)
+                        adicionou = True
+
+                db.session.commit()
+
+                if adicionou:
+                    flash("Entregador existente vinculado às farmácias selecionadas com sucesso.", "success")
+                else:
+                    flash("Esse entregador já estava vinculado às farmácias selecionadas.", "warning")
+
                 return redirect(url_for("entregadores"))
 
             novo = Entregador(
-                farmacia_id=current_user.farmacia_id,
+                farmacia_id=farmacias_ids[0],
                 nome=nome,
                 telefone=telefone,
                 ativo=True
@@ -650,16 +955,41 @@ def registrar_rotas(app):
             novo.set_password(senha)
 
             db.session.add(novo)
+            db.session.flush()
+
+            for farmacia_id in farmacias_ids:
+                vinculo = EntregadorFarmacia(
+                    entregador_id=novo.id,
+                    farmacia_id=farmacia_id,
+                    ativo=True
+                )
+                db.session.add(vinculo)
+
             db.session.commit()
+
             flash("Entregador cadastrado com sucesso.", "success")
             return redirect(url_for("entregadores"))
 
-        lista = Entregador.query.filter_by(
-            farmacia_id=current_user.farmacia_id
-        ).order_by(Entregador.id.desc()).all()
+        entregadores_ids = [
+            v.entregador_id
+            for v in EntregadorFarmacia.query.filter(
+                EntregadorFarmacia.farmacia_id.in_(farmacias_permitidas_ids),
+                EntregadorFarmacia.ativo.is_(True)
+            ).all()
+        ]
 
-        return render_template("entregadores.html", entregadores=lista)
+        if entregadores_ids:
+            lista = Entregador.query.filter(
+                Entregador.id.in_(entregadores_ids)
+            ).order_by(Entregador.id.desc()).all()
+        else:
+            lista = []
 
+        return render_template(
+            "entregadores.html",
+            entregadores=lista,
+            farmacias_usuario=farmacias_usuario
+        )
     # =========================
     # PEDIDOS
     # =========================
@@ -669,8 +999,12 @@ def registrar_rotas(app):
         if current_user.is_master:
             ultimo = Pedido.query.order_by(Pedido.id.desc()).first()
         else:
-            ultimo = Pedido.query.filter_by(
-                farmacia_id=current_user.farmacia_id
+            ids = farmacias_ids_do_usuario()
+            if not ids:
+                return jsonify({"ok": True, "pedido": None})
+
+            ultimo = Pedido.query.filter(
+                Pedido.farmacia_id.in_(ids)
             ).order_by(Pedido.id.desc()).first()
 
         if not ultimo:
@@ -693,6 +1027,11 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            flash("Nenhuma farmácia ativa selecionada.", "warning")
+            return redirect(url_for("dashboard"))
+
         if request.method == "POST":
             cliente_id = request.form.get("cliente_id")
             entregador_id = request.form.get("entregador_id")
@@ -704,7 +1043,7 @@ def registrar_rotas(app):
 
             cliente = Cliente.query.filter_by(
                 id=int(cliente_id),
-                farmacia_id=current_user.farmacia_id
+                farmacia_id=farmacia_id
             ).first()
 
             if not cliente:
@@ -715,12 +1054,21 @@ def registrar_rotas(app):
             if entregador_id:
                 entregador = Entregador.query.filter_by(
                     id=int(entregador_id),
-                    farmacia_id=current_user.farmacia_id,
                     ativo=True
                 ).first()
 
                 if not entregador:
-                    flash("Entregador inválido para esta farmácia.", "danger")
+                    flash("Entregador inválido.", "danger")
+                    return redirect(url_for("pedidos"))
+
+                vinculo_entregador = EntregadorFarmacia.query.filter_by(
+                    entregador_id=entregador.id,
+                    farmacia_id=farmacia_id,
+                    ativo=True
+                ).first()
+
+                if not vinculo_entregador:
+                    flash("Entregador não está vinculado a esta farmácia.", "danger")
                     return redirect(url_for("pedidos"))
 
             codigo = gerar_codigo_rastreio()
@@ -728,7 +1076,7 @@ def registrar_rotas(app):
                 codigo = gerar_codigo_rastreio()
 
             novo = Pedido(
-                farmacia_id=current_user.farmacia_id,
+                farmacia_id=farmacia_id,
                 cliente_id=cliente.id,
                 entregador_id=entregador.id if entregador else None,
                 status=status,
@@ -756,17 +1104,28 @@ def registrar_rotas(app):
             return redirect(url_for("pedidos"))
 
         lista = Pedido.query.filter_by(
-            farmacia_id=current_user.farmacia_id
+            farmacia_id=farmacia_id
         ).order_by(Pedido.id.desc()).all()
 
         clientes_lista = Cliente.query.filter_by(
-            farmacia_id=current_user.farmacia_id
+            farmacia_id=farmacia_id
         ).order_by(Cliente.nome.asc()).all()
 
-        entregadores_lista = Entregador.query.filter_by(
-            farmacia_id=current_user.farmacia_id,
-            ativo=True
-        ).order_by(Entregador.nome.asc()).all()
+        entregadores_ids = [
+            v.entregador_id
+            for v in EntregadorFarmacia.query.filter_by(
+                farmacia_id=farmacia_id,
+                ativo=True
+            ).all()
+        ]
+
+        if entregadores_ids:
+            entregadores_lista = Entregador.query.filter(
+                Entregador.id.in_(entregadores_ids),
+                Entregador.ativo.is_(True)
+            ).order_by(Entregador.nome.asc()).all()
+        else:
+            entregadores_lista = []
 
         return render_template(
             "pedidos.html",
@@ -780,7 +1139,7 @@ def registrar_rotas(app):
     def atualizar_status_pedido(pedido_id):
         pedido = Pedido.query.get_or_404(pedido_id)
 
-        if not current_user.is_master and pedido.farmacia_id != current_user.farmacia_id:
+        if not validar_acesso_farmacia(pedido.farmacia_id):
             abort(403)
 
         status_anterior = pedido.status
@@ -819,8 +1178,13 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
-        garantir_whatsapp_config(current_user.farmacia_id)
-        cfg = obter_config_whatsapp(current_user.farmacia_id)
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            flash("Nenhuma farmácia ativa selecionada.", "warning")
+            return redirect(url_for("dashboard"))
+
+        garantir_whatsapp_config(farmacia_id)
+        cfg = obter_config_whatsapp(farmacia_id)
 
         if request.method == "POST":
             cfg.ativo = bool(request.form.get("ativo"))
@@ -842,7 +1206,7 @@ def registrar_rotas(app):
             return redirect(url_for("whatsapp_config"))
 
         logs = WhatsAppLog.query.filter_by(
-            farmacia_id=current_user.farmacia_id
+            farmacia_id=farmacia_id
         ).order_by(WhatsAppLog.id.desc()).limit(20).all()
 
         return render_template(
@@ -858,6 +1222,11 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            flash("Nenhuma farmácia ativa selecionada.", "warning")
+            return redirect(url_for("dashboard"))
+
         numero = request.form.get("numero", "").strip()
         mensagem = request.form.get("mensagem", "").strip()
 
@@ -868,7 +1237,7 @@ def registrar_rotas(app):
         resultado = enviar_texto_whatsapp(
             numero=numero,
             mensagem=mensagem,
-            farmacia_id=current_user.farmacia_id,
+            farmacia_id=farmacia_id,
             tipo="teste_manual"
         )
 
@@ -942,32 +1311,36 @@ def registrar_rotas(app):
 
     @app.route("/entregador/login", methods=["GET", "POST"])
     def entregador_login():
-        farmacias = Farmacia.query.filter_by(ativo=True, status="ativa").order_by(Farmacia.nome.asc()).all()
-
         if request.method == "POST":
-            farmacia_id = request.form.get("farmacia_id", "").strip()
             telefone = request.form.get("telefone", "").strip()
             senha = request.form.get("senha", "").strip()
 
-            if not farmacia_id or not telefone or not senha:
-                flash("Preencha farmácia, telefone e senha.", "warning")
+            if not telefone or not senha:
+                flash("Preencha telefone e senha.", "warning")
                 return redirect(url_for("entregador_login"))
 
-            entregador = Entregador.query.filter_by(
-                farmacia_id=int(farmacia_id),
+            entregadores = Entregador.query.filter_by(
                 telefone=telefone,
                 ativo=True
-            ).first()
+            ).all()
 
-            if entregador and entregador.check_password(senha):
-                session["entregador_id"] = entregador.id
-                session["entregador_farmacia_id"] = entregador.farmacia_id
+            entregador_valido = None
+
+            for entregador in entregadores:
+                if entregador.check_password(senha):
+                    if entregador.farmacias_ids:
+                        entregador_valido = entregador
+                        break
+
+            if entregador_valido:
+                session["entregador_id"] = entregador_valido.id
+                session.pop("entregador_farmacia_id", None)
                 flash("Login realizado com sucesso.", "success")
                 return redirect(url_for("entregador_app"))
 
             flash("Dados inválidos.", "danger")
 
-        return render_template("entregador_login.html", farmacias=farmacias)
+        return render_template("entregador_login.html")
 
     @app.route("/entregador/logout")
     def entregador_logout():
@@ -979,47 +1352,95 @@ def registrar_rotas(app):
     @app.route("/entregador/app")
     def entregador_app():
         entregador_id = session.get("entregador_id")
-        farmacia_id = session.get("entregador_farmacia_id")
 
-        if not entregador_id or not farmacia_id:
+        if not entregador_id:
             flash("Faça login como entregador.", "warning")
             return redirect(url_for("entregador_login"))
 
         entregador = Entregador.query.filter_by(
             id=entregador_id,
-            farmacia_id=farmacia_id
+            ativo=True
         ).first_or_404()
 
+        farmacias_ids = entregador.farmacias_ids
+        if not farmacias_ids:
+            flash("Entregador sem farmácias vinculadas.", "warning")
+            return redirect(url_for("entregador_logout"))
+
+        farmacia_id_param = request.args.get("farmacia_id", "").strip()
+
+        if farmacia_id_param.lower() == "todas":
+            session.pop("entregador_farmacia_id", None)
+            farmacia_id_filtrada = None
+        elif farmacia_id_param:
+            try:
+                farmacia_id_teste = int(farmacia_id_param)
+                if farmacia_id_teste in farmacias_ids:
+                    session["entregador_farmacia_id"] = farmacia_id_teste
+                    farmacia_id_filtrada = farmacia_id_teste
+                else:
+                    farmacia_id_filtrada = session.get("entregador_farmacia_id")
+            except ValueError:
+                farmacia_id_filtrada = session.get("entregador_farmacia_id")
+        else:
+            farmacia_id_filtrada = session.get("entregador_farmacia_id")
+
+        if farmacia_id_filtrada and farmacia_id_filtrada not in farmacias_ids:
+            farmacia_id_filtrada = None
+            session.pop("entregador_farmacia_id", None)
+
+        if farmacia_id_filtrada:
+            ids_consulta = [farmacia_id_filtrada]
+        else:
+            ids_consulta = farmacias_ids
+
         pedidos = Pedido.query.filter(
-            Pedido.farmacia_id == farmacia_id,
+            Pedido.farmacia_id.in_(ids_consulta),
             Pedido.entregador_id == entregador.id,
             Pedido.status.in_(["recebido", "separacao", "saiu_entrega"])
         ).order_by(Pedido.id.desc()).all()
 
+        farmacias = Farmacia.query.filter(
+            Farmacia.id.in_(farmacias_ids)
+        ).order_by(Farmacia.nome.asc()).all()
+
         return render_template(
             "entregador_app.html",
             entregador=entregador,
-            pedidos=pedidos
+            pedidos=pedidos,
+            farmacias=farmacias,
+            farmacia_ativa_id=farmacia_id_filtrada,
+            exibindo_todas_farmacias=(farmacia_id_filtrada is None and len(farmacias_ids) > 1)
         )
 
     @app.route("/pedido/<int:pedido_id>/iniciar-entrega", methods=["POST"])
     def iniciar_entrega(pedido_id):
         entregador_id = session.get("entregador_id")
-        farmacia_id = session.get("entregador_farmacia_id")
 
-        if not entregador_id or not farmacia_id:
+        if not entregador_id:
             return jsonify({"ok": False, "mensagem": "Entregador não autenticado."}), 401
 
-        pedido = Pedido.query.filter_by(
-            id=pedido_id,
-            farmacia_id=farmacia_id
-        ).first_or_404()
+        entregador = Entregador.query.filter_by(
+            id=entregador_id,
+            ativo=True
+        ).first()
 
-        if pedido.entregador_id != entregador_id:
+        if not entregador:
+            return jsonify({"ok": False, "mensagem": "Entregador inválido."}), 401
+
+        pedido = Pedido.query.get_or_404(pedido_id)
+
+        if pedido.entregador_id != entregador.id:
             return jsonify({"ok": False, "mensagem": "Pedido não pertence a este entregador."}), 403
+
+        if pedido.farmacia_id not in entregador.farmacias_ids:
+            return jsonify({"ok": False, "mensagem": "Entrega não permitida para esta farmácia."}), 403
+
+        session["entregador_farmacia_id"] = pedido.farmacia_id
 
         status_anterior = pedido.status
         pedido.status = "saiu_entrega"
+
         if not pedido.saiu_entrega_em:
             pedido.saiu_entrega_em = agora_brasil()
 
@@ -1039,18 +1460,27 @@ def registrar_rotas(app):
     @app.route("/pedido/<int:pedido_id>/finalizar-entrega", methods=["POST"])
     def finalizar_entrega(pedido_id):
         entregador_id = session.get("entregador_id")
-        farmacia_id = session.get("entregador_farmacia_id")
 
-        if not entregador_id or not farmacia_id:
+        if not entregador_id:
             return jsonify({"ok": False, "mensagem": "Entregador não autenticado."}), 401
 
-        pedido = Pedido.query.filter_by(
-            id=pedido_id,
-            farmacia_id=farmacia_id
-        ).first_or_404()
+        entregador = Entregador.query.filter_by(
+            id=entregador_id,
+            ativo=True
+        ).first()
 
-        if pedido.entregador_id != entregador_id:
+        if not entregador:
+            return jsonify({"ok": False, "mensagem": "Entregador inválido."}), 401
+
+        pedido = Pedido.query.get_or_404(pedido_id)
+
+        if pedido.entregador_id != entregador.id:
             return jsonify({"ok": False, "mensagem": "Pedido não pertence a este entregador."}), 403
+
+        if pedido.farmacia_id not in entregador.farmacias_ids:
+            return jsonify({"ok": False, "mensagem": "Entrega não permitida para esta farmácia."}), 403
+
+        session["entregador_farmacia_id"] = pedido.farmacia_id
 
         status_anterior = pedido.status
         pedido.status = "entregue"
@@ -1066,15 +1496,17 @@ def registrar_rotas(app):
     @app.route("/api/entregador/localizacao", methods=["POST"])
     def salvar_localizacao():
         entregador_id = session.get("entregador_id")
-        farmacia_id = session.get("entregador_farmacia_id")
 
-        if not entregador_id or not farmacia_id:
+        if not entregador_id:
             return jsonify({"ok": False, "mensagem": "Entregador não autenticado."}), 401
 
         entregador = Entregador.query.filter_by(
             id=entregador_id,
-            farmacia_id=farmacia_id
-        ).first_or_404()
+            ativo=True
+        ).first()
+
+        if not entregador:
+            return jsonify({"ok": False, "mensagem": "Entregador inválido."}), 401
 
         data = request.get_json(silent=True) or {}
         latitude = str(data.get("latitude", "")).strip()
@@ -1085,11 +1517,27 @@ def registrar_rotas(app):
             return jsonify({"ok": False, "mensagem": "Latitude e longitude são obrigatórias."}), 400
 
         pedido = None
+        farmacia_id = None
+
         if pedido_id:
-            pedido = Pedido.query.filter_by(
-                id=pedido_id,
-                farmacia_id=farmacia_id
-            ).first()
+            pedido = Pedido.query.get(pedido_id)
+
+            if not pedido:
+                return jsonify({"ok": False, "mensagem": "Pedido não encontrado."}), 404
+
+            if pedido.entregador_id != entregador.id:
+                return jsonify({"ok": False, "mensagem": "Pedido não pertence a este entregador."}), 403
+
+            if pedido.farmacia_id not in entregador.farmacias_ids:
+                return jsonify({"ok": False, "mensagem": "Localização não permitida para esta farmácia."}), 403
+
+            farmacia_id = pedido.farmacia_id
+            session["entregador_farmacia_id"] = farmacia_id
+        else:
+            farmacia_id = session.get("entregador_farmacia_id")
+
+            if not farmacia_id or farmacia_id not in entregador.farmacias_ids:
+                return jsonify({"ok": False, "mensagem": "Farmácia da localização não definida."}), 400
 
         nova = Localizacao(
             farmacia_id=farmacia_id,
@@ -1109,9 +1557,20 @@ def registrar_rotas(app):
         if current_user.is_master:
             return jsonify([])
 
-        entregadores_lista = Entregador.query.filter_by(
-            farmacia_id=current_user.farmacia_id,
-            ativo=True
+        ids_usuario = farmacias_ids_do_usuario()
+        if not ids_usuario:
+            return jsonify([])
+
+        farmacia_id_ativa = session.get("farmacia_ativa_id")
+
+        if farmacia_id_ativa and farmacia_id_ativa in ids_usuario:
+            ids_consulta = [farmacia_id_ativa]
+        else:
+            ids_consulta = ids_usuario
+
+        entregadores_lista = Entregador.query.filter(
+            Entregador.farmacia_id.in_(ids_consulta),
+            Entregador.ativo.is_(True)
         ).all()
 
         resultado = []
@@ -1120,35 +1579,60 @@ def registrar_rotas(app):
 
         for e in entregadores_lista:
             ultima = Localizacao.query.filter_by(
-                farmacia_id=current_user.farmacia_id,
+                farmacia_id=e.farmacia_id,
                 entregador_id=e.id
             ).order_by(Localizacao.id.desc()).first()
 
-            if ultima:
-                data_ultima = ultima.data_hora
-                if data_ultima is not None and getattr(data_ultima, "tzinfo", None) is not None:
-                    data_ultima = data_ultima.replace(tzinfo=None)
+            if not ultima:
+                continue
 
-                online = data_ultima >= limite_online if data_ultima else False
+            try:
+                lat = float(ultima.latitude)
+                lng = float(ultima.longitude)
+            except (TypeError, ValueError):
+                continue
 
-                pedido = None
-                if ultima.pedido_id:
-                    pedido = db.session.get(Pedido, ultima.pedido_id)
+            data_ultima = ultima.data_hora
+            if data_ultima is not None and getattr(data_ultima, "tzinfo", None) is not None:
+                data_ultima = data_ultima.replace(tzinfo=None)
 
-                resultado.append({
-                    "id": e.id,
-                    "nome": e.nome,
-                    "telefone": e.telefone,
-                    "latitude": ultima.latitude,
-                    "longitude": ultima.longitude,
-                    "data_hora": ultima.data_hora.strftime("%d/%m/%Y %H:%M:%S") if ultima.data_hora else "",
-                    "online": online,
-                    "pedido_id": ultima.pedido_id,
-                    "pedido_status": pedido.status if pedido else None
-                })
+            online = data_ultima >= limite_online if data_ultima else False
+
+            pedido = None
+            cliente = None
+            if ultima.pedido_id:
+                pedido = db.session.get(Pedido, ultima.pedido_id)
+                if pedido:
+                    cliente = pedido.cliente
+
+            farmacia = db.session.get(Farmacia, e.farmacia_id)
+
+            cor_marcador = "#22c55e"
+            if farmacia:
+                cores = [
+                    "#22c55e", "#3b82f6", "#f59e0b", "#ef4444",
+                    "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"
+                ]
+                cor_marcador = cores[farmacia.id % len(cores)]
+
+            resultado.append({
+                "id": e.id,
+                "nome": e.nome,
+                "telefone": e.telefone,
+                "farmacia_id": e.farmacia_id,
+                "farmacia_nome": farmacia.nome if farmacia else None,
+                "latitude": lat,
+                "longitude": lng,
+                "data_hora": ultima.data_hora.strftime("%d/%m/%Y %H:%M:%S") if ultima.data_hora else "",
+                "online": online,
+                "pedido_id": ultima.pedido_id,
+                "pedido_status": pedido.status if pedido else None,
+                "cliente_nome": cliente.nome if cliente else None,
+                "cliente_endereco": cliente.endereco if cliente else None,
+                "cor": cor_marcador
+            })
 
         return jsonify(resultado)
-
     # =========================
     # RASTREIO
     # =========================
@@ -1210,7 +1694,7 @@ def registrar_rotas(app):
     def whatsapp_cliente(pedido_id):
         pedido = Pedido.query.get_or_404(pedido_id)
 
-        if not current_user.is_master and pedido.farmacia_id != current_user.farmacia_id:
+        if not validar_acesso_farmacia(pedido.farmacia_id):
             abort(403)
 
         link_rastreio = url_for("rastreio_cliente", codigo=pedido.codigo_rastreio, _external=True)
@@ -1232,10 +1716,15 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            flash("Nenhuma farmácia ativa selecionada.", "warning")
+            return redirect(url_for("dashboard"))
+
         inicio = request.args.get("inicio", "").strip()
         fim = request.args.get("fim", "").strip()
 
-        query = Pedido.query.filter_by(farmacia_id=current_user.farmacia_id)
+        query = Pedido.query.filter_by(farmacia_id=farmacia_id)
 
         if inicio:
             try:
@@ -1279,10 +1768,14 @@ def registrar_rotas(app):
         if current_user.is_master:
             return redirect(url_for("dashboard"))
 
+        farmacia_id = farmacia_ativa_id()
+        if not farmacia_id:
+            return redirect(url_for("dashboard"))
+
         inicio = request.args.get("inicio", "").strip()
         fim = request.args.get("fim", "").strip()
 
-        query = Pedido.query.filter_by(farmacia_id=current_user.farmacia_id)
+        query = Pedido.query.filter_by(farmacia_id=farmacia_id)
 
         if inicio:
             try:

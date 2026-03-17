@@ -25,19 +25,12 @@
       {% endwith %}
 
       <form method="post" class="login-form">
-        <select name="farmacia_id" required>
-          <option value="">Selecione a farmácia</option>
-          {% for farmacia in farmacias %}
-            <option value="{{ farmacia.id }}">{{ farmacia.nome }}</option>
-          {% endfor %}
-        </select>
-
         <input type="text" name="telefone" placeholder="Telefone" required>
         <input type="password" name="senha" placeholder="Senha" required>
         <button type="submit" class="btn btn-primary btn-full">Entrar</button>
       </form>
 
-      <p class="login-foot-note">Acesse com a farmácia, telefone e senha cadastrados</p>
+      <p class="login-foot-note">Acesse com telefone e senha cadastrados</p>
     </div>
   </div>
 </body>

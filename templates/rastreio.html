@@ -90,6 +90,20 @@
       box-shadow: 0 0 14px rgba(0,0,0,0.35);
     }
 
+    .cliente-marker {
+      background: #22c55e;
+      color: white;
+      border: 2px solid white;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.25);
+    }
+
     @keyframes rastPing {
       0% {
         transform: scale(0.8);
@@ -162,8 +176,13 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     let mapa = null;
-    let marcador = null;
+    let marcadorMoto = null;
+    let marcadorCliente = null;
+    let linhaEntrega = null;
+    let boundsAjustados = false;
+
     const codigo = "{{ pedido.codigo_rastreio }}";
+    const enderecoCliente = {{ pedido.cliente.endereco|tojson }};
 
     function statusClass(status) {
       return `status-badge status-${status}`;
@@ -181,6 +200,68 @@
         iconSize: [34, 34],
         iconAnchor: [17, 17]
       });
+    }
+
+    function criarIconeCliente() {
+      return L.divIcon({
+        className: "",
+        html: `<div class="cliente-marker">📍</div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 26]
+      });
+    }
+
+    function animarMarcador(marker, destino, duracao = 1800) {
+      const inicio = marker.getLatLng();
+      const inicioTempo = performance.now();
+
+      function passo(agora) {
+        const progresso = Math.min((agora - inicioTempo) / duracao, 1);
+
+        const lat = inicio.lat + (destino[0] - inicio.lat) * progresso;
+        const lng = inicio.lng + (destino[1] - inicio.lng) * progresso;
+
+        marker.setLatLng([lat, lng]);
+
+        if (progresso < 1) {
+          requestAnimationFrame(passo);
+        }
+      }
+
+      requestAnimationFrame(passo);
+    }
+
+    async function geocodificarEndereco(endereco) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(endereco)}`;
+        const res = await fetch(url, {
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+        const data = await res.json();
+
+        if (data && data.length > 0) {
+          return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        }
+      } catch (e) {
+        console.error("Erro ao geocodificar endereço:", e);
+      }
+
+      return null;
+    }
+
+    function atualizarLinhaEntrega(posMoto, posCliente) {
+      if (!posMoto || !posCliente) return;
+
+      if (linhaEntrega) {
+        linhaEntrega.setLatLngs([posMoto, posCliente]);
+      } else {
+        linhaEntrega = L.polyline([posMoto, posCliente], {
+          weight: 4,
+          opacity: 0.8
+        }).addTo(mapa);
+      }
     }
 
     async function carregarRastreio() {
@@ -221,25 +302,51 @@
           }).addTo(mapa);
         }
 
+        if (!marcadorCliente && enderecoCliente) {
+          const posCliente = await geocodificarEndereco(enderecoCliente);
+
+          if (posCliente) {
+            marcadorCliente = L.marker(posCliente, { icon: criarIconeCliente() }).addTo(mapa);
+            marcadorCliente.bindPopup(`
+              <strong>Destino da entrega</strong><br>
+              ${enderecoCliente}
+            `);
+          }
+        }
+
         if (data.latitude && data.longitude) {
           const lat = parseFloat(data.latitude);
           const lng = parseFloat(data.longitude);
 
           if (!isNaN(lat) && !isNaN(lng)) {
-            if (marcador) {
-              marcador.setLatLng([lat, lng]);
+            const posMoto = [lat, lng];
+
+            if (marcadorMoto) {
+              animarMarcador(marcadorMoto, posMoto, 1800);
             } else {
-              marcador = L.marker([lat, lng], { icon: criarIconeMoto() }).addTo(mapa);
+              marcadorMoto = L.marker(posMoto, { icon: criarIconeMoto() }).addTo(mapa);
             }
 
-            marcador.bindPopup(`
+            marcadorMoto.bindPopup(`
               <strong>Pedido #${data.pedido_id}</strong><br>
               Status: ${data.status}<br>
               Entregador: ${data.entregador || "Aguardando"}<br>
               Atualização: ${data.data_hora || "--"}
             `);
 
-            mapa.setView([lat, lng], 15, { animate: true });
+            if (marcadorCliente) {
+              atualizarLinhaEntrega(posMoto, marcadorCliente.getLatLng());
+            }
+
+            if (!boundsAjustados) {
+              if (marcadorCliente) {
+                const grupo = L.featureGroup([marcadorMoto, marcadorCliente]);
+                mapa.fitBounds(grupo.getBounds(), { padding: [40, 40] });
+              } else {
+                mapa.setView(posMoto, 15, { animate: true });
+              }
+              boundsAjustados = true;
+            }
           }
         }
       } catch (e) {

@@ -12,7 +12,81 @@
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
   />
+
+  <style>
+  #mapa-entregadores {
+    min-height: 420px;
+    width: 100%;
+    z-index: 1;
+  }
+
+  .checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.03);
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .form-block {
+    grid-column: 1 / -1;
+  }
+
+  .marker-wrap {
+    position: relative;
+    width: 24px;
+    height: 24px;
+  }
+
+  .marker-ping {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    opacity: 0.25;
+    animation: pulseMarker 1.5s infinite;
+  }
+
+  .marker-core {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+  }
+
+  .marker-core.offline {
+    opacity: 0.85;
+  }
+
+  @keyframes pulseMarker {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.5;
+    }
+    70% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -63,8 +137,13 @@
     </main>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>
