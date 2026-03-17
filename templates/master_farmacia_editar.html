@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Editar Farmácia{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Editar Farmácia</h1>
+    <p class="muted">Atualize os dados da farmácia</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Dados da Farmácia</h2>
+
+  <form method="post" class="form-grid">
+    <input type="text" name="nome" value="{{ farmacia.nome }}" placeholder="Nome da farmácia" required>
+    <input type="text" name="cnpj" value="{{ farmacia.cnpj or '' }}" placeholder="CNPJ">
+    <input type="text" name="telefone" value="{{ farmacia.telefone or '' }}" placeholder="Telefone">
+    <input type="email" name="email" value="{{ farmacia.email or '' }}" placeholder="E-mail">
+    <input type="text" name="cidade" value="{{ farmacia.cidade or '' }}" placeholder="Cidade">
+    <input type="text" name="endereco" value="{{ farmacia.endereco or '' }}" placeholder="Endereço">
+
+    <select name="plano">
+      <option value="basico" {% if farmacia.plano == "basico" %}selected{% endif %}>Básico</option>
+      <option value="pro" {% if farmacia.plano == "pro" %}selected{% endif %}>Pro</option>
+      <option value="premium" {% if farmacia.plano == "premium" %}selected{% endif %}>Premium</option>
+    </select>
+
+    <select name="status">
+      <option value="ativa" {% if farmacia.status == "ativa" %}selected{% endif %}>Ativa</option>
+      <option value="inativa" {% if farmacia.status == "inativa" %}selected{% endif %}>Inativa</option>
+    </select>
+
+    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+  </form>
+</div>
+{% endblock %}

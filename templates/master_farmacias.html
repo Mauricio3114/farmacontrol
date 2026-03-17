@@ -50,7 +50,7 @@
           <th>Plano</th>
           <th>Status</th>
           <th>Ativa</th>
-          <th>Ação</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -64,10 +64,18 @@
           <td>{{ farmacia.plano }}</td>
           <td>{{ farmacia.status }}</td>
           <td>{{ "Sim" if farmacia.ativo else "Não" }}</td>
-          <td>
+          <td style="display:flex; gap:8px; flex-wrap:wrap;">
             <a href="{{ url_for('master_toggle_farmacia', farmacia_id=farmacia.id) }}" class="btn btn-secondary">
               {{ "Desativar" if farmacia.ativo else "Ativar" }}
             </a>
+
+            <a href="{{ url_for('master_editar_farmacia', farmacia_id=farmacia.id) }}" class="btn btn-primary">
+              Editar
+            </a>
+
+            <form method="post" action="{{ url_for('master_apagar_farmacia', farmacia_id=farmacia.id) }}" onsubmit="return confirm('Tem certeza que deseja apagar esta farmácia?');">
+              <button type="submit" class="btn btn-danger">Apagar</button>
+            </form>
           </td>
         </tr>
         {% else %}

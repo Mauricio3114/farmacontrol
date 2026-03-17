@@ -740,6 +740,7 @@ def registrar_rotas(app):
         farmacias = Farmacia.query.order_by(Farmacia.id.desc()).all()
         return render_template("master_farmacias.html", farmacias=farmacias)
 
+
     @app.route("/master/farmacia/<int:farmacia_id>/toggle")
     @login_required
     @master_required
@@ -754,6 +755,71 @@ def registrar_rotas(app):
         db.session.commit()
 
         flash("Status da farmácia atualizado.", "success")
+        return redirect(url_for("master_farmacias"))
+
+
+    @app.route("/master/farmacia/<int:farmacia_id>/editar", methods=["GET", "POST"])
+    @login_required
+    @master_required
+    def master_editar_farmacia(farmacia_id):
+        farmacia = db.session.get(Farmacia, farmacia_id)
+        if not farmacia:
+            flash("Farmácia não encontrada.", "danger")
+            return redirect(url_for("master_farmacias"))
+
+        if request.method == "POST":
+            nome = request.form.get("nome", "").strip()
+            cnpj = request.form.get("cnpj", "").strip()
+            telefone = request.form.get("telefone", "").strip()
+            email = request.form.get("email", "").strip()
+            endereco = request.form.get("endereco", "").strip()
+            cidade = request.form.get("cidade", "").strip()
+            plano = request.form.get("plano", "basico").strip()
+            status = request.form.get("status", "ativa").strip()
+
+            if not nome:
+                flash("Nome da farmácia é obrigatório.", "warning")
+                return redirect(url_for("master_editar_farmacia", farmacia_id=farmacia.id))
+
+            if cnpj:
+                existe_cnpj = Farmacia.query.filter(
+                    Farmacia.cnpj == cnpj,
+                    Farmacia.id != farmacia.id
+                ).first()
+                if existe_cnpj:
+                    flash("Já existe outra farmácia com esse CNPJ.", "danger")
+                    return redirect(url_for("master_editar_farmacia", farmacia_id=farmacia.id))
+
+            farmacia.nome = nome
+            farmacia.cnpj = cnpj or None
+            farmacia.telefone = telefone or None
+            farmacia.email = email or None
+            farmacia.endereco = endereco or None
+            farmacia.cidade = cidade or None
+            farmacia.plano = plano or "basico"
+            farmacia.status = status or "ativa"
+            farmacia.ativo = (farmacia.status == "ativa")
+
+            db.session.commit()
+            flash("Farmácia atualizada com sucesso.", "success")
+            return redirect(url_for("master_farmacias"))
+
+        return render_template("master_farmacia_editar.html", farmacia=farmacia)
+
+
+    @app.route("/master/farmacia/<int:farmacia_id>/apagar", methods=["POST"])
+    @login_required
+    @master_required
+    def master_apagar_farmacia(farmacia_id):
+        farmacia = db.session.get(Farmacia, farmacia_id)
+        if not farmacia:
+            flash("Farmácia não encontrada.", "danger")
+            return redirect(url_for("master_farmacias"))
+
+        db.session.delete(farmacia)
+        db.session.commit()
+
+        flash("Farmácia apagada com sucesso.", "success")
         return redirect(url_for("master_farmacias"))
 
     # =========================
