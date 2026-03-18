@@ -5,6 +5,191 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>App do Entregador</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <style>
+    .entregador-header-title {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .entregador-header-subtitle {
+      margin: 6px 0 0 0;
+      color: rgba(255,255,255,0.72);
+      font-size: 15px;
+    }
+
+    .entregador-select {
+      width: 100%;
+      background: #091427;
+      color: #fff;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 600;
+      outline: none;
+    }
+
+    .pedido-mobile {
+      background: linear-gradient(180deg, rgba(6,16,38,0.96), rgba(5,12,30,0.96));
+      border: 1px solid rgba(59, 130, 246, 0.10);
+      border-radius: 22px;
+      padding: 18px;
+      margin-top: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+
+    .pedido-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .pedido-head h3 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 800;
+      color: #38bdf8;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: #fff;
+      min-width: 120px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    }
+
+    .status-recebido {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    }
+
+    .status-separacao {
+      background: linear-gradient(135deg, #eab308, #ca8a04);
+      color: #0f172a;
+    }
+
+    .status-saiu_entrega {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+    }
+
+    .status-entregue {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    .pedido-info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 8px;
+      margin-bottom: 18px;
+    }
+
+    .pedido-info-item {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(148, 163, 184, 0.08);
+      border-radius: 16px;
+      padding: 12px 14px;
+    }
+
+    .pedido-info-label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: rgba(255,255,255,0.58);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .pedido-info-value {
+      display: block;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .pedido-info-value.endereco {
+      color: #e2e8f0;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .pedido-info-value.bairro {
+      color: #93c5fd;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .pedido-mobile-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .pedido-mobile-actions .btn {
+      border-radius: 14px;
+      font-weight: 700;
+      padding: 13px 16px;
+    }
+
+    .rotas-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-route-google,
+    .btn-route-waze {
+      text-align: center;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rota-link-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .farmacia-chip-entregador {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    .farmacia-chip-todas {
+      background: linear-gradient(135deg, #334155, #1e293b);
+    }
+
+    .pedido-vazio {
+      color: rgba(255,255,255,0.65);
+      font-size: 15px;
+      margin-top: 8px;
+    }
+  </style>
 </head>
 
 <body class="mobile-app-body">
@@ -13,8 +198,8 @@
 
   <div class="mobile-top mobile-top-row">
     <div>
-      <h1>Olá, {{ entregador.nome }}</h1>
-      <p>Área do entregador</p>
+      <h1 class="entregador-header-title">Olá, {{ entregador.nome }}</h1>
+      <p class="entregador-header-subtitle">Área do entregador</p>
     </div>
 
     <a href="{{ url_for('entregador_logout') }}" class="btn btn-secondary btn-small">
@@ -25,11 +210,11 @@
   {% if farmacias and farmacias|length > 1 %}
   <div class="mobile-card">
     <form method="get" action="{{ url_for('entregador_app') }}">
-      <label for="farmacia_id" class="muted" style="display:block; margin-bottom: 8px;">
+      <label for="farmacia_id" class="muted" style="display:block; margin-bottom: 10px;">
         Visualizar pedidos
       </label>
 
-      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" style="width: 100%;">
+      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" class="entregador-select">
         <option value="todas" {% if exibindo_todas_farmacias %}selected{% endif %}>
           Todas as farmácias
         </option>
@@ -62,6 +247,12 @@
         <p class="muted">
           Ao iniciar a entrega, a localização começa automaticamente
         </p>
+
+        {% if exibindo_todas_farmacias %}
+          <span class="farmacia-chip-entregador farmacia-chip-todas">TODAS AS FARMÁCIAS</span>
+        {% elif farmacia_ativa_nome %}
+          <span class="farmacia-chip-entregador">{{ farmacia_ativa_nome.upper() }}</span>
+        {% endif %}
       </div>
     </div>
 
@@ -75,18 +266,60 @@
 
       <div class="pedido-head">
         <h3>Pedido #{{ pedido.id }}</h3>
+
         <span class="status-badge status-{{ pedido.status }}">
-          {{ pedido.status }}
+          {% if pedido.status == "recebido" %}
+            RECEBIDO
+          {% elif pedido.status == "separacao" %}
+            SEPARAÇÃO
+          {% elif pedido.status == "saiu_entrega" %}
+            EM ROTA
+          {% elif pedido.status == "entregue" %}
+            ENTREGUE
+          {% else %}
+            {{ pedido.status|replace("_", " ")|upper }}
+          {% endif %}
         </span>
       </div>
 
-      <p><strong>Farmácia:</strong> {{ pedido.farmacia.nome if pedido.farmacia else "-" }}</p>
-      <p><strong>Cliente:</strong> {{ pedido.cliente.nome }}</p>
-      <p><strong>Endereço:</strong> {{ pedido.cliente.endereco }}</p>
+      <div class="pedido-info-grid">
+        <div class="pedido-info-item">
+          <span class="pedido-info-label">Farmácia</span>
+          <span class="pedido-info-value">
+            {{ pedido.farmacia.nome if pedido.farmacia else "-" }}
+          </span>
+        </div>
 
-      {% if pedido.descricao is defined and pedido.descricao %}
-      <p><strong>Descrição:</strong> {{ pedido.descricao }}</p>
-      {% endif %}
+        <div class="pedido-info-item">
+          <span class="pedido-info-label">Cliente</span>
+          <span class="pedido-info-value">
+            {{ pedido.cliente.nome }}
+          </span>
+        </div>
+
+        <div class="pedido-info-item">
+          <span class="pedido-info-label">Endereço</span>
+          <span class="pedido-info-value endereco">
+            {{ pedido.cliente.endereco }}
+          </span>
+        </div>
+
+        <div class="pedido-info-item">
+          <span class="pedido-info-label">Bairro</span>
+          <span class="pedido-info-value bairro">
+            {{ pedido.cliente.bairro or "Não informado" }}
+          </span>
+        </div>
+
+        {% if pedido.descricao is defined and pedido.descricao %}
+        <div class="pedido-info-item">
+          <span class="pedido-info-label">Descrição</span>
+          <span class="pedido-info-value">
+            {{ pedido.descricao }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
 
       <div class="pedido-mobile-actions">
 
@@ -107,7 +340,7 @@
         <div class="rotas-row">
           <a
             class="btn btn-route-google"
-            href="https://www.google.com/maps/dir/?api=1&destination={{ pedido.cliente.endereco | urlencode }}"
+            href="https://www.google.com/maps/dir/?api=1&destination={{ ((pedido.cliente.endereco or '') ~ ', ' ~ (pedido.cliente.bairro or '')) | urlencode }}"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -116,7 +349,7 @@
 
           <a
             class="btn btn-route-waze"
-            href="https://waze.com/ul?q={{ pedido.cliente.endereco | urlencode }}&navigate=yes"
+            href="https://waze.com/ul?q={{ ((pedido.cliente.endereco or '') ~ ', ' ~ (pedido.cliente.bairro or '')) | urlencode }}&navigate=yes"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -159,7 +392,7 @@
 
     {% else %}
 
-    <p class="muted">
+    <p class="pedido-vazio">
       Nenhum pedido ativo no momento.
     </p>
 
@@ -252,7 +485,7 @@ async function iniciarEntrega(pedidoId, botao) {
       const badge = card.querySelector(".status-badge");
 
       if (badge) {
-        badge.textContent = "saiu_entrega";
+        badge.textContent = "EM ROTA";
         badge.className = "status-badge status-saiu_entrega";
       }
     }
@@ -300,7 +533,7 @@ async function finalizarEntrega(pedidoId, botao) {
         const badge = card.querySelector(".status-badge");
 
         if (badge) {
-          badge.textContent = "entregue";
+          badge.textContent = "ENTREGUE";
           badge.className = "status-badge status-entregue";
         }
 

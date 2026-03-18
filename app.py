@@ -590,9 +590,14 @@ def registrar_rotas(app):
         session.pop("entregador_farmacia_id", None)
         return redirect(url_for("login"))
 
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+
     @app.route("/dashboard")
     @login_required
     def dashboard():
+
+        # 🔥 MASTER
         if current_user.is_master:
             total_farmacias = Farmacia.query.count()
             total_farmacias_ativas = Farmacia.query.filter_by(ativo=True, status="ativa").count()
@@ -612,6 +617,7 @@ def registrar_rotas(app):
                 farmacias=Farmacia.query.order_by(Farmacia.id.desc()).limit(10).all()
             )
 
+        # 🔥 FARMÁCIA
         farmacias_usuario = farmacias_do_usuario_logado()
         ids = [f.id for f in farmacias_usuario]
 
@@ -652,12 +658,21 @@ def registrar_rotas(app):
             ids_consulta = ids
             farmacia = None
 
-        total_clientes = Cliente.query.filter(Cliente.farmacia_id.in_(ids_consulta)).count()
-        total_entregadores = Entregador.query.filter(
-            Entregador.farmacia_id.in_(ids_consulta),
-            Entregador.ativo.is_(True)
+        total_clientes = Cliente.query.filter(
+            Cliente.farmacia_id.in_(ids_consulta)
         ).count()
-        total_pedidos = Pedido.query.filter(Pedido.farmacia_id.in_(ids_consulta)).count()
+
+        total_entregadores = db.session.query(Entregador.id).join(
+            EntregadorFarmacia, EntregadorFarmacia.entregador_id == Entregador.id
+        ).filter(
+            EntregadorFarmacia.farmacia_id.in_(ids_consulta),
+            EntregadorFarmacia.ativo.is_(True),
+            Entregador.ativo.is_(True)
+        ).distinct().count()
+
+        total_pedidos = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta)
+        ).count()
 
         pedidos_recebidos = Pedido.query.filter(
             Pedido.farmacia_id.in_(ids_consulta),
@@ -683,6 +698,23 @@ def registrar_rotas(app):
             Pedido.farmacia_id.in_(ids_consulta)
         ).order_by(Pedido.id.desc()).limit(10).all()
 
+        # 🔥 GRÁFICO (7 dias)
+        hoje = datetime.utcnow()
+        dados_grafico = []
+
+        for i in range(6, -1, -1):
+            dia = hoje - timedelta(days=i)
+
+            total = db.session.query(func.count(Pedido.id)).filter(
+                Pedido.farmacia_id.in_(ids_consulta),
+                func.date(Pedido.data_criacao) == dia.date()
+            ).scalar()
+
+            dados_grafico.append({
+                "dia": dia.strftime("%d/%m"),
+                "total": total or 0
+            })
+
         return render_template(
             "dashboard.html",
             farmacia=farmacia,
@@ -696,7 +728,8 @@ def registrar_rotas(app):
             pedidos_separacao=pedidos_separacao,
             pedidos_entrega=pedidos_entrega,
             pedidos_entregues=pedidos_entregues,
-            ultimos_pedidos=ultimos_pedidos
+            ultimos_pedidos=ultimos_pedidos,
+            dados_grafico=dados_grafico
         )
 
     # =========================
@@ -919,19 +952,22 @@ def registrar_rotas(app):
             nome = request.form.get("nome", "").strip()
             telefone = request.form.get("telefone", "").strip()
             endereco = request.form.get("endereco", "").strip()
+            bairro = request.form.get("bairro", "").strip()
 
             if not nome or not telefone or not endereco:
-                flash("Preencha todos os campos do cliente.", "warning")
+                flash("Preencha nome, telefone e endereço do cliente.", "warning")
                 return redirect(url_for("clientes"))
 
             novo = Cliente(
                 farmacia_id=farmacia_id,
                 nome=nome,
                 telefone=telefone,
-                endereco=endereco
+                endereco=endereco,
+                bairro=bairro if bairro else None
             )
             db.session.add(novo)
             db.session.commit()
+
             flash("Cliente cadastrado com sucesso.", "success")
             return redirect(url_for("clientes"))
 
@@ -1465,8 +1501,11 @@ def registrar_rotas(app):
 
         if farmacia_id_filtrada:
             ids_consulta = [farmacia_id_filtrada]
+            farmacia_ativa = db.session.get(Farmacia, farmacia_id_filtrada)
+            farmacia_ativa_nome = farmacia_ativa.nome if farmacia_ativa else None
         else:
             ids_consulta = farmacias_ids
+            farmacia_ativa_nome = None
 
         pedidos = Pedido.query.filter(
             Pedido.farmacia_id.in_(ids_consulta),
@@ -1484,6 +1523,7 @@ def registrar_rotas(app):
             pedidos=pedidos,
             farmacias=farmacias,
             farmacia_ativa_id=farmacia_id_filtrada,
+            farmacia_ativa_nome=farmacia_ativa_nome,
             exibindo_todas_farmacias=(farmacia_id_filtrada is None and len(farmacias_ids) > 1)
         )
 

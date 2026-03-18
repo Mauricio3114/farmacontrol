@@ -4,33 +4,38 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Dashboard</h1>
-    <p class="muted">
-      Controle geral da farmácia e das entregas
-      {% if exibindo_todas_farmacias %}
-        • Todas as farmácias
-      {% elif farmacia %}
-        • {{ farmacia.nome }}
-      {% endif %}
+    <h1 class="titulo-dashboard">CONTROLE GERAL DAS ENTREGAS</h1>
+
+    <p class="subtitulo-dashboard">
+      Visualizar dashboard
     </p>
+
+    {% if exibindo_todas_farmacias %}
+      <div class="bloco-farmacia-ativa">
+        <span class="badge-farmacia-destaque badge-farmacia-todas">
+          TODAS AS FARMÁCIAS
+        </span>
+      </div>
+    {% elif farmacia %}
+      <div class="bloco-farmacia-ativa">
+        <span class="badge-farmacia-destaque badge-farmacia-unica">
+          {{ farmacia.nome.upper() }}
+        </span>
+      </div>
+    {% endif %}
   </div>
 
   {% if farmacias_usuario and farmacias_usuario|length > 1 %}
   <div>
     <form method="get" action="{{ url_for('dashboard') }}">
-      <label for="farmacia_id" class="muted" style="display:block; margin-bottom: 6px;">
-        Visualizar dashboard
-      </label>
-      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" style="min-width: 220px;">
+      <select name="farmacia_id" id="farmacia_id" onchange="this.form.submit()" class="select-chique">
         <option value="todas" {% if exibindo_todas_farmacias %}selected{% endif %}>
-          Todas as farmácias
+          TODAS AS FARMÁCIAS
         </option>
         {% for farmacia_item in farmacias_usuario %}
-        <option
-          value="{{ farmacia_item.id }}"
-          {% if farmacia_ativa_id == farmacia_item.id %}selected{% endif %}
-        >
-          {{ farmacia_item.nome }}
+        <option value="{{ farmacia_item.id }}"
+          {% if farmacia_ativa_id == farmacia_item.id %}selected{% endif %}>
+          {{ farmacia_item.nome.upper() }}
         </option>
         {% endfor %}
       </select>
@@ -40,49 +45,70 @@
 </div>
 
 <div class="cards-grid">
-  <div class="card">
-    <h3>Clientes</h3>
-    <strong>{{ total_clientes }}</strong>
+
+  <div class="card card-blue">
+    <div class="card-top">
+      <span>Clientes</span>
+      <span class="card-icon">👤</span>
+    </div>
+    <div class="card-value">{{ total_clientes }}</div>
   </div>
-  <div class="card">
-    <h3>Entregadores</h3>
-    <strong>{{ total_entregadores }}</strong>
+
+  <div class="card card-green">
+    <div class="card-top">
+      <span>Entregadores</span>
+      <span class="card-icon">🛵</span>
+    </div>
+    <div class="card-value">{{ total_entregadores }}</div>
   </div>
-  <div class="card">
-    <h3>Pedidos</h3>
-    <strong>{{ total_pedidos }}</strong>
+
+  <div class="card card-purple">
+    <div class="card-top">
+      <span>Pedidos</span>
+      <span class="card-icon">📦</span>
+    </div>
+    <div class="card-value">{{ total_pedidos }}</div>
   </div>
-  <div class="card">
-    <h3>Em entrega</h3>
-    <strong>{{ pedidos_entrega }}</strong>
+
+  <div class="card card-orange">
+    <div class="card-top">
+      <span>Em entrega</span>
+      <span class="card-icon">🚚</span>
+    </div>
+    <div class="card-value">{{ pedidos_entrega }}</div>
   </div>
+
 </div>
 
 <div class="cards-grid">
-  <div class="card">
-    <h3>Recebidos</h3>
-    <strong>{{ pedidos_recebidos }}</strong>
-  </div>
-  <div class="card">
-    <h3>Separação</h3>
-    <strong>{{ pedidos_separacao }}</strong>
-  </div>
-  <div class="card">
-    <h3>Entregues</h3>
-    <strong>{{ pedidos_entregues }}</strong>
-  </div>
-</div>
 
-<div class="panel">
-  <div class="panel-head-flex">
-    <div>
-      <h2>Mapa dos Entregadores</h2>
-      <p class="muted">Atualização automática a cada 5 segundos</p>
+  <div class="card card-blue">
+    <div class="card-top">
+      <span>Recebidos</span>
+      <span class="card-icon">📥</span>
     </div>
+    <div class="card-value">{{ pedidos_recebidos }}</div>
   </div>
-  <div id="mapa-entregadores" style="height: 420px; border-radius: 16px;"></div>
+
+  <div class="card card-yellow">
+    <div class="card-top">
+      <span>Separação</span>
+      <span class="card-icon">📦</span>
+    </div>
+    <div class="card-value">{{ pedidos_separacao }}</div>
+  </div>
+
+  <div class="card card-green">
+    <div class="card-top">
+      <span>Entregues</span>
+      <span class="card-icon">✅</span>
+    </div>
+    <div class="card-value">{{ pedidos_entregues }}</div>
+  </div>
+
 </div>
 
+<!-- 🔥 ÚLTIMOS PEDIDOS (SUBIU PRA CIMA) -->
 <div class="panel">
   <h2>Últimos Pedidos</h2>
   <div class="table-wrap">
@@ -99,13 +125,25 @@
       </thead>
       <tbody>
         {% for pedido in ultimos_pedidos %}
-        <tr>
+        <tr class="
+          {% if pedido.status == 'saiu_entrega' %}linha-em-rota{% endif %}
+        ">
           <td>#{{ pedido.id }}</td>
           <td>{{ pedido.farmacia.nome if pedido.farmacia else "-" }}</td>
           <td>{{ pedido.cliente.nome }}</td>
           <td>{{ pedido.cliente.endereco }}</td>
           <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
-          <td>{{ pedido.status }}</td>
+
+          <td>
+            <span class="badge 
+              {% if pedido.status == 'recebido' %}badge-blue
+              {% elif pedido.status == 'saiu_entrega' %}badge-orange
+              {% elif pedido.status == 'entregue' %}badge-green
+              {% else %}badge-gray{% endif %}
+            ">
+              {{ pedido.status.replace('_', ' ').upper() }}
+            </span>
+          </td>
         </tr>
         {% else %}
         <tr>
@@ -116,124 +154,27 @@
     </table>
   </div>
 </div>
+
+<!-- MAPA (DESCEU PRA BAIXO) -->
+<div class="panel">
+  <div class="panel-head-flex">
+    <div>
+      <h2>Mapa dos Entregadores</h2>
+      <p class="muted">Atualização automática a cada 5 segundos</p>
+    </div>
+  </div>
+  <div id="mapa-entregadores" style="height: 420px; border-radius: 16px;"></div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-console.log("SCRIPT DASHBOARD CARREGOU");
-
 let mapa = null;
 let camadaMarcadores = null;
 let marcadores = {};
-let mapaJaAjustouZoom = false;
-
-function criarIconeOnline(cor="#22c55e") {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div class="marker-wrap">
-        <div class="marker-ping" style="background:${cor};"></div>
-        <div class="marker-core online" style="background:${cor}; border: 2px solid #fff;"></div>
-      </div>
-    `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
-  });
-}
-
-function criarIconeOffline(cor="#64748b") {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div class="marker-wrap">
-        <div class="marker-core offline" style="background:${cor}; border: 2px solid #fff;"></div>
-      </div>
-    `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10]
-  });
-}
-
-function animarMarcador(marker, destino, duracao = 1200) {
-  const inicio = marker.getLatLng();
-  const inicioTempo = performance.now();
-
-  function passo(agora) {
-    const progresso = Math.min((agora - inicioTempo) / duracao, 1);
-
-    const lat = inicio.lat + (destino[0] - inicio.lat) * progresso;
-    const lng = inicio.lng + (destino[1] - inicio.lng) * progresso;
-
-    marker.setLatLng([lat, lng]);
-
-    if (progresso < 1) {
-      requestAnimationFrame(passo);
-    }
-  }
-
-  requestAnimationFrame(passo);
-}
-
-function montarPopup(item) {
-  const statusTexto = item.online ? "Online" : "Offline";
-
-  return `
-    <div style="min-width:240px;">
-      <div style="font-size:15px; font-weight:700; margin-bottom:6px;">
-        🛵 ${item.nome}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Farmácia:</strong> ${item.farmacia_nome || "-"}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Telefone:</strong> ${item.telefone || "-"}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Status entregador:</strong> ${statusTexto}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Última atualização:</strong> ${item.data_hora || "-"}
-      </div>
-
-      <hr style="border:none; border-top:1px solid #ddd; margin:8px 0;">
-
-      <div style="margin-bottom:4px;">
-        <strong>Pedido:</strong> ${item.pedido_id ? "#" + item.pedido_id : "Sem pedido ativo"}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Status pedido:</strong> ${item.pedido_status || "-"}
-      </div>
-
-      <div style="margin-bottom:4px;">
-        <strong>Cliente:</strong> ${item.cliente_nome || "-"}
-      </div>
-
-      <div style="margin-bottom:8px;">
-        <strong>Endereço:</strong> ${item.cliente_endereco || "-"}
-      </div>
-
-      ${
-        item.cliente_endereco
-          ? `<a
-               href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.cliente_endereco)}"
-               target="_blank"
-               rel="noopener noreferrer"
-               style="display:inline-block;padding:8px 12px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;font-size:13px;font-weight:600;"
-             >Abrir rota</a>`
-          : ""
-      }
-    </div>
-  `;
-}
 
 async function carregarMapaEntregadores() {
-  console.log("ATUALIZANDO MAPA...");
-
   const el = document.getElementById("mapa-entregadores");
   if (!el) return;
 
@@ -241,8 +182,7 @@ async function carregarMapaEntregadores() {
     mapa = L.map("mapa-entregadores").setView([-3.7319, -38.5267], 12);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap"
+      maxZoom: 19
     }).addTo(mapa);
 
     camadaMarcadores = L.layerGroup().addTo(mapa);
@@ -252,57 +192,60 @@ async function carregarMapaEntregadores() {
     const res = await fetch("/api/mapa/entregadores");
     const data = await res.json();
 
-    console.log("DADOS MAPA:", data);
-
-    const idsAtuais = new Set();
-    const bounds = [];
+    camadaMarcadores.clearLayers();
 
     data.forEach(item => {
-      const lat = parseFloat(item.latitude);
-      const lng = parseFloat(item.longitude);
+      if (!item.latitude || !item.longitude) return;
 
-      if (isNaN(lat) || isNaN(lng)) return;
+      const marker = L.marker([item.latitude, item.longitude])
+        .addTo(camadaMarcadores)
+        .bindPopup(item.nome);
 
-      bounds.push([lat, lng]);
-      idsAtuais.add(String(item.id));
-
-      const cor = item.cor || "#22c55e";
-      const icone = item.online ? criarIconeOnline(cor) : criarIconeOffline(cor);
-      const popupHtml = montarPopup(item);
-
-      if (marcadores[item.id]) {
-        const marker = marcadores[item.id];
-        marker.setIcon(icone);
-        marker.setPopupContent(popupHtml);
-        animarMarcador(marker, [lat, lng], 1400);
-      } else {
-        const marker = L.marker([lat, lng], { icon: icone }).addTo(camadaMarcadores);
-        marker.bindPopup(popupHtml);
-        marcadores[item.id] = marker;
-      }
+      marcadores[item.id] = marker;
     });
-
-    Object.keys(marcadores).forEach(id => {
-      if (!idsAtuais.has(String(id))) {
-        camadaMarcadores.removeLayer(marcadores[id]);
-        delete marcadores[id];
-      }
-    });
-
-    if (bounds.length === 1) {
-      mapa.setView(bounds[0], 15);
-    }
-
-    if (bounds.length > 1) {
-      mapa.fitBounds(bounds, { padding: [40, 40] });
-    }
 
   } catch (e) {
-    console.error("Erro ao carregar entregadores no mapa:", e);
+    console.error("Erro no mapa:", e);
   }
 }
 
 carregarMapaEntregadores();
 setInterval(carregarMapaEntregadores, 5000);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const dados = {{ dados_grafico | tojson }};
+
+const labels = dados.map(d => d.dia);
+const valores = dados.map(d => d.total);
+
+const ctx = document.getElementById('graficoPedidos');
+
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [{
+      label: 'Pedidos',
+      data: valores,
+      tension: 0.4,
+      fill: true,
+      borderColor: '#2563eb',
+      backgroundColor: 'rgba(37, 99, 235, 0.1)'
+    }]
+  },
+  options: {
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      y: {
+        beginAtZero: true
+      }
+    }
+  }
+});
 </script>
 {% endblock %}

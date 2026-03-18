@@ -48,10 +48,8 @@ class Farmacia(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
 
-    # RELAÇÃO LEGADA: pode manter por enquanto para não quebrar telas antigas
     usuarios = db.relationship("User", backref="farmacia", lazy=True)
 
-    # NOVA RELAÇÃO: usuário pode estar vinculado a várias farmácias
     usuarios_vinculados = db.relationship(
         "UsuarioFarmacia",
         back_populates="farmacia",
@@ -75,12 +73,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False)
 
-    # master = admin geral do SaaS
-    # admin = admin da farmácia
     perfil = db.Column(db.String(20), nullable=False, default="admin")
 
-    # CAMPO LEGADO
-    # manter por enquanto para não quebrar o que já existe
     farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=True)
 
     ativo = db.Column(db.Boolean, default=True)
@@ -105,17 +99,12 @@ class User(UserMixin, db.Model):
 
     @property
     def farmacias_ids(self):
-        """
-        Retorna os ids das farmácias que o usuário pode acessar.
-        Para master, isso será tratado nas rotas.
-        """
         ids = [
             vinculo.farmacia_id
             for vinculo in self.vinculos_farmacias
             if vinculo.ativo
         ]
 
-        # compatibilidade com estrutura antiga
         if not ids and self.farmacia_id:
             ids = [self.farmacia_id]
 
@@ -123,9 +112,6 @@ class User(UserMixin, db.Model):
 
     @property
     def farmacia_principal_id(self):
-        """
-        Útil para telas antigas que ainda esperam uma única farmácia.
-        """
         if self.farmacia_id:
             return self.farmacia_id
 
@@ -154,6 +140,7 @@ class Cliente(db.Model):
     nome = db.Column(db.String(150), nullable=False)
     telefone = db.Column(db.String(30), nullable=False)
     endereco = db.Column(db.String(255), nullable=False)
+    bairro = db.Column(db.String(100), nullable=True)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
 
     pedidos = db.relationship("Pedido", backref="cliente", lazy=True)
@@ -181,7 +168,6 @@ class Entregador(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # legado / compatibilidade
     farmacia_id = db.Column(db.Integer, db.ForeignKey("farmacias.id"), nullable=True)
 
     nome = db.Column(db.String(150), nullable=False)
@@ -239,7 +225,12 @@ class Pedido(db.Model):
     status = db.Column(db.String(30), nullable=False, default="recebido")
     codigo_rastreio = db.Column(db.String(40), unique=True, nullable=True)
 
+    # 🔥 NOVO CAMPO PRO GRÁFICO
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # MANTIDO (compatibilidade)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
+
     saiu_entrega_em = db.Column(db.DateTime, nullable=True)
     entregue_em = db.Column(db.DateTime, nullable=True)
 

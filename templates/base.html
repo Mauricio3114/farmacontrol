@@ -9,6 +9,7 @@
   <link rel="manifest" href="{{ url_for('manifest') }}">
   <meta name="theme-color" content="#0f172a">
 
+  <!-- LEAFLET -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -20,6 +21,55 @@
     min-height: 420px;
     width: 100%;
     z-index: 1;
+  }
+
+  /* 🔥 BADGES */
+  .badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .badge-blue { background: #1d4ed8; color: #fff; }
+  .badge-orange { background: #f97316; color: #fff; }
+  .badge-green { background: #22c55e; color: #fff; }
+  .badge-gray { background: #64748b; color: #fff; }
+  .badge-dark { background: #1e293b; color: #fff; }
+  .badge-primary { background: #2563eb; color: #fff; }
+
+  /* 🔥 SELECT BONITO */
+  .select-chique {
+    background: #0f172a;
+    color: #fff;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 600;
+  }
+
+  /* 🔥 LINHA EM ROTA */
+  .linha-em-rota {
+    background: rgba(249, 115, 22, 0.08);
+  }
+
+  /* 🔥 MENU ATIVO */
+  .menu a {
+    display: block;
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    transition: 0.2s;
+  }
+
+  .menu a:hover {
+    background: rgba(255,255,255,0.05);
+  }
+
+  .menu a.ativo {
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
   }
 
   .checkbox-grid {
@@ -43,6 +93,7 @@
     grid-column: 1 / -1;
   }
 
+  /* 🔥 MARCADORES MAPA */
   .marker-wrap {
     position: relative;
     width: 24px;
@@ -86,10 +137,137 @@
       opacity: 0;
     }
   }
+
+  /* 🔥 NOVOS CARDS */
+
+.card {
+  border-radius: 16px;
+  padding: 18px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  transition: 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.card-value {
+  font-size: 32px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+.card-icon {
+  font-size: 20px;
+}
+
+/* CORES */
+
+.card-blue {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.card-green {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.card-purple {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+}
+
+.card-orange {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.card-yellow {
+  background: linear-gradient(135deg, #eab308, #ca8a04);
+}
+
+canvas {
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.menu a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  transition: 0.2s;
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.menu a:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.20);
+}
+
+.menu a.ativo {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.dashboard-badge-farmacia {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.titulo-dashboard {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.subtitulo-dashboard {
+  margin: 0;
+  opacity: 0.8;
+  font-size: 15px;
+}
+
+.bloco-farmacia-ativa {
+  margin-top: 18px;
+  margin-bottom: 18px;
+}
+
+.badge-farmacia-destaque {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.badge-farmacia-todas {
+  background: linear-gradient(135deg, #334155, #1e293b);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.badge-farmacia-unica {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.14);
+}
 </style>
 </head>
+
 <body>
   <div class="app-shell">
+
     {% if current_user.is_authenticated and request.endpoint not in ['login', 'entregador_login'] %}
     <aside class="sidebar">
       <div class="brand">
@@ -103,13 +281,14 @@
       </div>
 
       <nav class="menu">
+
         {% if current_user.is_master %}
-          <a href="{{ url_for('dashboard') }}">Dashboard Geral</a>
+          <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}ativo{% endif %}">Dashboard Geral</a>
           <a href="{{ url_for('master_farmacias') }}">Farmácias</a>
           <a href="{{ url_for('master_usuarios') }}">Usuários</a>
           <a href="{{ url_for('logout') }}">Sair</a>
         {% else %}
-          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}ativo{% endif %}">Dashboard</a>
           <a href="{{ url_for('clientes') }}">Clientes</a>
           <a href="{{ url_for('entregadores') }}">Entregadores</a>
           <a href="{{ url_for('pedidos') }}">Pedidos</a>
@@ -118,11 +297,13 @@
           <a href="{{ url_for('entregador_login') }}" target="_blank">App Entregador</a>
           <a href="{{ url_for('logout') }}">Sair</a>
         {% endif %}
+
       </nav>
     </aside>
     {% endif %}
 
     <main class="main-content {% if not current_user.is_authenticated %}full{% endif %}">
+
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="flash-wrap">
@@ -137,6 +318,7 @@
     </main>
   </div>
 
+  <!-- LEAFLET -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     crossorigin=""
