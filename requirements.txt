@@ -22,3 +22,4 @@ urllib3==2.6.3
 Werkzeug==3.0.1
 gunicorn==25.1.0
 psycopg[binary]==3.3.3
+pywebpush

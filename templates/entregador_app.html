@@ -162,12 +162,6 @@
       justify-content: center;
     }
 
-    .rota-link-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
     .farmacia-chip-entregador {
       display: inline-block;
       margin-top: 10px;
@@ -189,6 +183,54 @@
       font-size: 15px;
       margin-top: 8px;
     }
+
+    .alerta-card {
+      border: 1px solid rgba(59, 130, 246, 0.15);
+      background: linear-gradient(180deg, rgba(8,20,44,0.96), rgba(6,14,33,0.96));
+      margin-bottom: 18px;
+    }
+
+    .alerta-head h2 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 22px;
+    }
+
+    .alerta-head p {
+      margin: 8px 0 0 0;
+      color: rgba(255,255,255,0.72);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .alerta-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .alerta-status-chip {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.14);
+      color: #e2e8f0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    .alerta-status-chip.ok {
+      background: rgba(34, 197, 94, 0.16);
+      color: #bbf7d0;
+    }
+
+    .alerta-status-chip.warn {
+      background: rgba(249, 115, 22, 0.16);
+      color: #fed7aa;
+    }
   </style>
 </head>
 
@@ -205,6 +247,22 @@
     <a href="{{ url_for('entregador_logout') }}" class="btn btn-secondary btn-small">
       Sair
     </a>
+  </div>
+
+  <div class="mobile-card alerta-card">
+    <div class="alerta-head">
+      <h2>Alertas por push</h2>
+      <p>
+        Ative as notificações para receber pedido novo e atualização mesmo com o celular bloqueado.
+      </p>
+      <span id="alerta-status" class="alerta-status-chip">ALERTAS DESATIVADOS</span>
+    </div>
+
+    <div class="alerta-actions">
+      <button class="btn btn-primary" type="button" onclick="ativarPushEntregador()">
+        Ativar notificações
+      </button>
+    </div>
   </div>
 
   {% if farmacias and farmacias|length > 1 %}
@@ -405,6 +463,102 @@
 <script>
 let watchId = null;
 let pedidoAtivoId = null;
+
+function atualizarChipAlerta(texto, tipo = "") {
+  const chip = document.getElementById("alerta-status");
+  if (!chip) return;
+
+  chip.textContent = texto;
+  chip.className = "alerta-status-chip";
+  if (tipo) chip.classList.add(tipo);
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
+async function ativarPushEntregador() {
+  if (!("serviceWorker" in navigator)) {
+    alert("Service Worker não suportado neste navegador.");
+    atualizarChipAlerta("SEM SUPORTE", "warn");
+    return;
+  }
+
+  if (!("PushManager" in window)) {
+    alert("Push não suportado neste navegador.");
+    atualizarChipAlerta("SEM PUSH", "warn");
+    return;
+  }
+
+  if (!("Notification" in window)) {
+    alert("Notificações não suportadas neste navegador.");
+    atualizarChipAlerta("SEM NOTIFICAÇÃO", "warn");
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+
+    if (permission !== "granted") {
+      atualizarChipAlerta("PERMISSÃO NEGADA", "warn");
+      alert("Permissão de notificação não concedida.");
+      return;
+    }
+
+    const keyResp = await fetch("/api/push/public-key");
+    const keyData = await keyResp.json();
+
+    if (!keyData.ok || !keyData.public_key) {
+      atualizarChipAlerta("PUSH NÃO CONFIGURADO", "warn");
+      alert("Push ainda não foi configurado no servidor.");
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.register("/sw.js");
+
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyData.public_key)
+      });
+    }
+
+    const saveResp = await fetch("/api/entregador/push/subscribe", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(subscription)
+    });
+
+    const saveData = await saveResp.json();
+
+    if (!saveData.ok) {
+      atualizarChipAlerta("ERRO AO ATIVAR", "warn");
+      alert(saveData.mensagem || "Erro ao ativar push.");
+      return;
+    }
+
+    atualizarChipAlerta("ALERTAS ATIVADOS", "ok");
+    alert("Notificações ativadas com sucesso.");
+
+  } catch (e) {
+    console.error("Erro ao ativar push:", e);
+    atualizarChipAlerta("ERRO AO ATIVAR", "warn");
+    alert("Erro ao ativar notificações push.");
+  }
+}
 
 async function enviarPosicao(pedidoId, latitude, longitude) {
   try {
@@ -607,7 +761,26 @@ function pararMonitoramentoLocalizacao() {
     watchId = null;
   }
 }
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if ("Notification" in window) {
+    if (Notification.permission === "granted") {
+      atualizarChipAlerta("ALERTAS ATIVADOS", "ok");
+    } else if (Notification.permission === "denied") {
+      atualizarChipAlerta("PERMISSÃO NEGADA", "warn");
+    }
+  }
+
+  if ("serviceWorker" in navigator) {
+    try {
+      await navigator.serviceWorker.register("/sw.js");
+    } catch (e) {
+      console.error("Erro ao registrar service worker:", e);
+    }
+  }
+});
 </script>
 
+<script src="/static/app.js"></script>
 </body>
 </html>

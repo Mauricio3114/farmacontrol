@@ -186,6 +186,13 @@ class Entregador(db.Model):
         lazy=True
     )
 
+    push_subscriptions = db.relationship(
+        "EntregadorPushSubscription",
+        back_populates="entregador",
+        cascade="all, delete-orphan",
+        lazy=True
+    )
+
     __table_args__ = (
         db.UniqueConstraint("telefone", name="uq_entregador_telefone_global"),
     )
@@ -213,6 +220,25 @@ class Entregador(db.Model):
         return farmacia_id in self.farmacias_ids
 
 
+class EntregadorPushSubscription(db.Model):
+    __tablename__ = "entregador_push_subscriptions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    entregador_id = db.Column(db.Integer, db.ForeignKey("entregadores.id"), nullable=False)
+
+    endpoint = db.Column(db.Text, nullable=False, unique=True)
+    p256dh = db.Column(db.Text, nullable=False)
+    auth = db.Column(db.Text, nullable=False)
+
+    user_agent = db.Column(db.Text, nullable=True)
+    ativo = db.Column(db.Boolean, default=True)
+
+    criado_em = db.Column(db.DateTime, default=agora_brasil)
+    atualizado_em = db.Column(db.DateTime, default=agora_brasil, onupdate=agora_brasil)
+
+    entregador = db.relationship("Entregador", back_populates="push_subscriptions")
+
+
 class Pedido(db.Model):
     __tablename__ = "pedidos"
 
@@ -225,10 +251,7 @@ class Pedido(db.Model):
     status = db.Column(db.String(30), nullable=False, default="recebido")
     codigo_rastreio = db.Column(db.String(40), unique=True, nullable=True)
 
-    # 🔥 NOVO CAMPO PRO GRÁFICO
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
-
-    # MANTIDO (compatibilidade)
     criado_em = db.Column(db.DateTime, default=agora_brasil)
 
     saiu_entrega_em = db.Column(db.DateTime, nullable=True)

@@ -21,11 +21,14 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
+from pywebpush import webpush, WebPushException
+
 from extensions import db, login_manager
 
 from models import (
     Farmacia, User, Cliente, Entregador, Pedido, Localizacao,
-    WhatsAppConfig, WhatsAppLog, UsuarioFarmacia, EntregadorFarmacia
+    WhatsAppConfig, WhatsAppLog, UsuarioFarmacia, EntregadorFarmacia,
+    EntregadorPushSubscription
 )
 
 
@@ -531,6 +534,66 @@ def disparar_whatsapp_pedido_entregue(pedido):
     )
 
 
+def push_habilitado():
+    return bool(
+        os.environ.get("VAPID_PUBLIC_KEY") and
+        os.environ.get("VAPID_PRIVATE_KEY") and
+        os.environ.get("VAPID_CLAIMS_SUB")
+    )
+
+
+def enviar_push_para_entregador(entregador_id, titulo, corpo, url="/entregador/app", tag="farmacontrol-push"):
+    if not push_habilitado():
+        return
+
+    subscriptions = EntregadorPushSubscription.query.filter_by(
+        entregador_id=entregador_id,
+        ativo=True
+    ).all()
+
+    if not subscriptions:
+        return
+
+    payload = json.dumps({
+        "title": titulo,
+        "body": corpo,
+        "url": url,
+        "tag": tag
+    })
+
+    vapid_private_key = os.environ.get("VAPID_PRIVATE_KEY")
+    vapid_claims = {
+        "sub": os.environ.get("VAPID_CLAIMS_SUB")
+    }
+
+    alterou = False
+
+    for sub in subscriptions:
+        subscription_info = {
+            "endpoint": sub.endpoint,
+            "keys": {
+                "p256dh": sub.p256dh,
+                "auth": sub.auth
+            }
+        }
+
+        try:
+            webpush(
+                subscription_info=subscription_info,
+                data=payload,
+                vapid_private_key=vapid_private_key,
+                vapid_claims=vapid_claims
+            )
+        except WebPushException as e:
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code in [404, 410]:
+                sub.ativo = False
+                alterou = True
+
+    if alterou:
+        db.session.commit()    
+
+
 def registrar_rotas(app):
 
     @app.route("/")
@@ -538,6 +601,16 @@ def registrar_rotas(app):
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
         return redirect(url_for("login"))
+    
+    @app.route("/subscribe", methods=["POST"])
+    def subscribe():
+        from flask import request, jsonify
+        sub = request.json
+
+        with open("subscriptions.json", "a") as f:
+            f.write(json.dumps(sub) + "\n")
+
+        return jsonify({"status": "ok"})
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -1206,6 +1279,15 @@ def registrar_rotas(app):
             db.session.add(novo)
             db.session.commit()
 
+            if novo.entregador_id:
+                enviar_push_para_entregador(
+                    entregador_id=novo.entregador_id,
+                    titulo="Novo pedido para entrega",
+                    corpo=f"Pedido #{novo.id} para {novo.cliente.nome}",
+                    url=url_for("entregador_app", _external=True),
+                    tag=f"pedido-novo-{novo.id}"
+                )
+
             if novo.status == "recebido":
                 disparar_whatsapp_pedido_recebido(novo)
 
@@ -1291,6 +1373,25 @@ def registrar_rotas(app):
             pedido.entregue_em = agora_brasil()
 
         db.session.commit()
+
+        if pedido.entregador_id:
+            status_label = novo_status
+            if novo_status == "recebido":
+                status_label = "RECEBIDO"
+            elif novo_status == "separacao":
+                status_label = "SEPARAÇÃO"
+            elif novo_status == "saiu_entrega":
+                status_label = "EM ROTA"
+            elif novo_status == "entregue":
+                status_label = "ENTREGUE"
+
+            enviar_push_para_entregador(
+                entregador_id=pedido.entregador_id,
+                titulo="Status do pedido atualizado",
+                corpo=f"Pedido #{pedido.id} agora está {status_label}",
+                url=url_for("entregador_app", _external=True),
+                tag=f"pedido-status-{pedido.id}"
+            )
 
         if status_anterior != novo_status:
             if novo_status == "saiu_entrega":
@@ -1549,6 +1650,130 @@ def registrar_rotas(app):
             farmacia_ativa_nome=farmacia_ativa_nome,
             exibindo_todas_farmacias=(farmacia_id_filtrada is None and len(farmacias_ids) > 1)
         )
+    
+    @app.route("/api/push/public-key")
+    def api_push_public_key():
+        public_key = os.environ.get("VAPID_PUBLIC_KEY")
+
+        if not public_key:
+            return jsonify({
+                "ok": False,
+                "mensagem": "Push não configurado no servidor."
+            }), 200
+
+        return jsonify({
+            "ok": True,
+            "public_key": public_key
+        })
+
+
+    @app.route("/api/entregador/push/subscribe", methods=["POST"])
+    def api_entregador_push_subscribe():
+        entregador_id = session.get("entregador_id")
+
+        if not entregador_id:
+            return jsonify({"ok": False, "mensagem": "Entregador não autenticado."}), 401
+
+        entregador = Entregador.query.filter_by(
+            id=entregador_id,
+            ativo=True
+        ).first()
+
+        if not entregador:
+            return jsonify({"ok": False, "mensagem": "Entregador inválido."}), 401
+
+        data = request.get_json(silent=True) or {}
+        endpoint = (data.get("endpoint") or "").strip()
+        keys = data.get("keys") or {}
+
+        p256dh = (keys.get("p256dh") or "").strip()
+        auth = (keys.get("auth") or "").strip()
+
+        if not endpoint or not p256dh or not auth:
+            return jsonify({"ok": False, "mensagem": "Inscrição push inválida."}), 400
+
+        subscription = EntregadorPushSubscription.query.filter_by(endpoint=endpoint).first()
+
+        if subscription:
+            subscription.entregador_id = entregador.id
+            subscription.p256dh = p256dh
+            subscription.auth = auth
+            subscription.user_agent = request.headers.get("User-Agent")
+            subscription.ativo = True
+        else:
+            subscription = EntregadorPushSubscription(
+                entregador_id=entregador.id,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+                user_agent=request.headers.get("User-Agent"),
+                ativo=True
+            )
+            db.session.add(subscription)
+
+        db.session.commit()
+
+        return jsonify({"ok": True, "mensagem": "Push ativado com sucesso."})
+
+    @app.route("/api/entregador/alertas")
+    def api_entregador_alertas():
+        entregador_id = session.get("entregador_id")
+
+        if not entregador_id:
+            return jsonify({"ok": False, "mensagem": "Entregador não autenticado."}), 401
+
+        entregador = Entregador.query.filter_by(
+            id=entregador_id,
+            ativo=True
+        ).first()
+
+        if not entregador:
+            return jsonify({"ok": False, "mensagem": "Entregador inválido."}), 401
+
+        farmacias_ids = entregador.farmacias_ids
+        if not farmacias_ids:
+            return jsonify({"ok": True, "pedidos": []})
+
+        farmacia_id_filtrada = session.get("entregador_farmacia_id")
+
+        if farmacia_id_filtrada and farmacia_id_filtrada in farmacias_ids:
+            ids_consulta = [farmacia_id_filtrada]
+        else:
+            ids_consulta = farmacias_ids
+
+        pedidos = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.entregador_id == entregador.id,
+            Pedido.status.in_(["recebido", "separacao", "saiu_entrega"])
+        ).order_by(Pedido.id.desc()).all()
+
+        resultado = []
+
+        for pedido in pedidos:
+            status_label = pedido.status
+            if pedido.status == "recebido":
+                status_label = "RECEBIDO"
+            elif pedido.status == "separacao":
+                status_label = "SEPARAÇÃO"
+            elif pedido.status == "saiu_entrega":
+                status_label = "EM ROTA"
+            elif pedido.status == "entregue":
+                status_label = "ENTREGUE"
+
+            resultado.append({
+                "id": pedido.id,
+                "status": pedido.status,
+                "status_label": status_label,
+                "farmacia_nome": pedido.farmacia.nome if pedido.farmacia else "-",
+                "cliente_nome": pedido.cliente.nome if pedido.cliente else "-",
+                "endereco": pedido.cliente.endereco if pedido.cliente else "-",
+                "bairro": pedido.cliente.bairro if pedido.cliente and pedido.cliente.bairro else ""
+            })
+
+        return jsonify({
+            "ok": True,
+            "pedidos": resultado
+        })    
 
     @app.route("/pedido/<int:pedido_id>/iniciar-entrega", methods=["POST"])
     def iniciar_entrega(pedido_id):
