@@ -52,18 +52,19 @@ def create_app():
     app.secret_key = os.environ.get("SECRET_KEY", "super-secret-key")
 
     database_url = os.environ.get("DATABASE_URL")
+    em_render = os.environ.get("RENDER") == "true"
 
-    if database_url:
-        # 🔥 FORÇA usar psycopg v3 (corrige erro do Render)
-        if database_url.startswith("postgres://"):
-            database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
-        elif database_url.startswith("postgresql://"):
-            database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if not database_url:
+        if em_render:
+            raise RuntimeError("DATABASE_URL não configurada em produção.")
+        database_url = f"sqlite:///{DB_PATH}"
 
-        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-    else:
-        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
@@ -1247,6 +1248,24 @@ def registrar_rotas(app):
             clientes=clientes_lista,
             entregadores=entregadores_lista
         )
+    
+    @app.route("/backup")
+    @login_required
+    def backup():
+        import json
+
+        dados = {
+            "clientes": [
+                {"nome": c.nome, "telefone": c.telefone, "endereco": c.endereco}
+                for c in Cliente.query.all()
+            ],
+            "entregadores": [
+                {"nome": e.nome, "telefone": e.telefone}
+                for e in Entregador.query.all()
+            ],
+        }
+
+        return json.dumps(dados, indent=2)
 
     @app.route("/pedido/<int:pedido_id>/status", methods=["POST"])
     @login_required
