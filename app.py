@@ -1222,6 +1222,10 @@ def registrar_rotas(app):
                 flash("Cliente é obrigatório.", "warning")
                 return redirect(url_for("pedidos"))
 
+            if not entregador_id:
+                flash("SELECIONE O ENTREGADOR", "danger")
+                return redirect(url_for("pedidos"))
+
             cliente = Cliente.query.filter_by(
                 id=int(cliente_id),
                 farmacia_id=farmacia_id
@@ -1231,26 +1235,24 @@ def registrar_rotas(app):
                 flash("Cliente inválido para esta farmácia.", "danger")
                 return redirect(url_for("pedidos"))
 
-            entregador = None
-            if entregador_id:
-                entregador = Entregador.query.filter_by(
-                    id=int(entregador_id),
-                    ativo=True
-                ).first()
+            entregador = Entregador.query.filter_by(
+                id=int(entregador_id),
+                ativo=True
+            ).first()
 
-                if not entregador:
-                    flash("Entregador inválido.", "danger")
-                    return redirect(url_for("pedidos"))
+            if not entregador:
+                flash("Entregador inválido.", "danger")
+                return redirect(url_for("pedidos"))
 
-                vinculo_entregador = EntregadorFarmacia.query.filter_by(
-                    entregador_id=entregador.id,
-                    farmacia_id=farmacia_id,
-                    ativo=True
-                ).first()
+            vinculo_entregador = EntregadorFarmacia.query.filter_by(
+                entregador_id=entregador.id,
+                farmacia_id=farmacia_id,
+                ativo=True
+            ).first()
 
-                if not vinculo_entregador:
-                    flash("Entregador não está vinculado a esta farmácia.", "danger")
-                    return redirect(url_for("pedidos"))
+            if not vinculo_entregador:
+                flash("Entregador não está vinculado a esta farmácia.", "danger")
+                return redirect(url_for("pedidos"))
 
             codigo = gerar_codigo_rastreio()
             while Pedido.query.filter_by(codigo_rastreio=codigo).first():
@@ -1259,7 +1261,7 @@ def registrar_rotas(app):
             novo = Pedido(
                 farmacia_id=farmacia_id,
                 cliente_id=cliente.id,
-                entregador_id=entregador.id if entregador else None,
+                entregador_id=entregador.id,
                 status=status,
                 codigo_rastreio=codigo
             )

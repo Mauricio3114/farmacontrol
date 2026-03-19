@@ -11,15 +11,33 @@
 
 <div class="panel">
   <h2>Novo Pedido</h2>
-  <form method="post" class="form-grid">
-    <select name="cliente_id" required>
-      <option value="">Selecione o cliente</option>
-      {% for cliente in clientes %}
-        <option value="{{ cliente.id }}">{{ cliente.nome }}</option>
-      {% endfor %}
-    </select>
 
-    <select name="entregador_id">
+  <form method="post" class="form-grid" id="form-pedido">
+    <div style="grid-column: 1 / -1; position: relative;">
+      <label for="busca-cliente" class="muted" style="display:block; margin-bottom:8px;">
+        Buscar cliente
+      </label>
+
+      <input
+        type="text"
+        id="busca-cliente"
+        placeholder="Digite o nome do cliente"
+        autocomplete="off"
+      >
+
+      <input type="hidden" name="cliente_id" id="cliente_id" required>
+
+      <div id="resultado-clientes" class="busca-clientes-lista" style="display:none;"></div>
+    </div>
+
+    <div style="grid-column: 1 / -1;">
+      <div id="cliente-selecionado-box" class="cliente-selecionado-box" style="display:none;">
+        <strong>Cliente selecionado:</strong>
+        <span id="cliente-selecionado-texto"></span>
+      </div>
+    </div>
+
+    <select name="entregador_id" id="entregador_id" required>
       <option value="">Selecione o entregador</option>
       {% for entregador in entregadores %}
         <option value="{{ entregador.id }}">{{ entregador.nome }}</option>
@@ -58,7 +76,12 @@
         <tr>
           <td>#{{ pedido.id }}</td>
           <td>{{ pedido.cliente.nome }}</td>
-          <td>{{ pedido.cliente.endereco }}</td>
+          <td>
+            {{ pedido.cliente.endereco }}
+            {% if pedido.cliente.bairro %}
+              <br><small class="muted">{{ pedido.cliente.bairro }}</small>
+            {% endif %}
+          </td>
           <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
           <td>{{ pedido.status }}</td>
           <td>
@@ -92,4 +115,162 @@
     </table>
   </div>
 </div>
+
+<style>
+.busca-clientes-lista {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #091427;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 30;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+}
+
+.busca-cliente-item {
+  padding: 12px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  color: #fff;
+  transition: background 0.2s ease;
+}
+
+.busca-cliente-item:last-child {
+  border-bottom: none;
+}
+
+.busca-cliente-item:hover {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.busca-cliente-nome {
+  font-weight: 700;
+  color: #ffffff;
+  display: block;
+}
+
+.busca-cliente-info {
+  font-size: 13px;
+  color: rgba(255,255,255,0.66);
+  display: block;
+  margin-top: 4px;
+}
+
+.cliente-selecionado-box {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.20);
+  color: #dbeafe;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const campoBusca = document.getElementById("busca-cliente");
+  const resultadoClientes = document.getElementById("resultado-clientes");
+  const clienteIdInput = document.getElementById("cliente_id");
+  const clienteSelecionadoBox = document.getElementById("cliente-selecionado-box");
+  const clienteSelecionadoTexto = document.getElementById("cliente-selecionado-texto");
+  const formPedido = document.getElementById("form-pedido");
+  const selectEntregador = document.getElementById("entregador_id");
+
+  const clientes = [
+    {% for cliente in clientes %}
+    {
+      id: "{{ cliente.id }}",
+      nome: "{{ cliente.nome|escape }}",
+      bairro: "{{ (cliente.bairro or '')|escape }}",
+      endereco: "{{ cliente.endereco|escape }}"
+    },
+    {% endfor %}
+  ];
+
+  function esconderResultados() {
+    resultadoClientes.style.display = "none";
+    resultadoClientes.innerHTML = "";
+  }
+
+  function mostrarResultados(lista) {
+    resultadoClientes.innerHTML = "";
+
+    if (!lista.length) {
+      esconderResultados();
+      return;
+    }
+
+    lista.forEach(cliente => {
+      const item = document.createElement("div");
+      item.className = "busca-cliente-item";
+
+      item.innerHTML = `
+        <span class="busca-cliente-nome">${cliente.nome}</span>
+        <span class="busca-cliente-info">
+          ${cliente.bairro ? cliente.bairro + " • " : ""}${cliente.endereco}
+        </span>
+      `;
+
+      item.addEventListener("click", function () {
+        campoBusca.value = cliente.nome;
+        clienteIdInput.value = cliente.id;
+        clienteSelecionadoTexto.textContent =
+          `${cliente.nome}${cliente.bairro ? " - " + cliente.bairro : ""}`;
+        clienteSelecionadoBox.style.display = "block";
+        esconderResultados();
+      });
+
+      resultadoClientes.appendChild(item);
+    });
+
+    resultadoClientes.style.display = "block";
+  }
+
+  campoBusca.addEventListener("input", function () {
+    const termo = this.value.toLowerCase().trim();
+
+    clienteIdInput.value = "";
+    clienteSelecionadoBox.style.display = "none";
+
+    if (!termo) {
+      esconderResultados();
+      return;
+    }
+
+    const filtrados = clientes.filter(cliente =>
+      cliente.nome.toLowerCase().includes(termo) ||
+      cliente.bairro.toLowerCase().includes(termo) ||
+      cliente.endereco.toLowerCase().includes(termo)
+    );
+
+    mostrarResultados(filtrados);
+  });
+
+  document.addEventListener("click", function (e) {
+    if (!resultadoClientes.contains(e.target) && e.target !== campoBusca) {
+      esconderResultados();
+    }
+  });
+
+  if (formPedido && selectEntregador) {
+    formPedido.addEventListener("submit", function (e) {
+      if (!clienteIdInput.value) {
+        e.preventDefault();
+        alert("SELECIONE O CLIENTE");
+        campoBusca.focus();
+        return;
+      }
+
+      if (!selectEntregador.value) {
+        e.preventDefault();
+        alert("SELECIONE O ENTREGADOR");
+        selectEntregador.focus();
+      }
+    });
+  }
+});
+</script>
 {% endblock %}
