@@ -493,6 +493,8 @@ async function ativarPushEntregador() {
     return;
   }
 
+  ativarPushEntregador();
+
   if (!("PushManager" in window)) {
     alert("Push não suportado neste navegador.");
     atualizarChipAlerta("SEM PUSH", "warn");

@@ -82,7 +82,9 @@ def create_app():
         garantir_codigo_rastreio_nos_pedidos()
 
     registrar_rotas(app)
+
     return app
+   
 
 
 def criar_admin_master_padrao():
@@ -591,7 +593,7 @@ def enviar_push_para_entregador(entregador_id, titulo, corpo, url="/entregador/a
                 alterou = True
 
     if alterou:
-        db.session.commit()    
+        db.session.commit()
 
 
 def registrar_rotas(app):
@@ -601,17 +603,8 @@ def registrar_rotas(app):
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))
         return redirect(url_for("login"))
-    
-    @app.route("/subscribe", methods=["POST"])
-    def subscribe():
-        from flask import request, jsonify
-        sub = request.json
 
-        with open("subscriptions.json", "a") as f:
-            f.write(json.dumps(sub) + "\n")
-
-        return jsonify({"status": "ok"})
-
+   
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if current_user.is_authenticated:
