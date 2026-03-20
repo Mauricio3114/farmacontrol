@@ -1564,7 +1564,6 @@ def registrar_rotas(app):
             if entregador_valido:
                 session["entregador_id"] = entregador_valido.id
                 session.clear()
-                session.pop("entregador_farmacia_id", None)
                 flash("Login realizado com sucesso.", "success")
                 return redirect(url_for("entregador_app"))
 
