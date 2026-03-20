@@ -493,8 +493,6 @@ async function ativarPushEntregador() {
     return;
   }
 
-  ativarPushEntregador();
-
   if (!("PushManager" in window)) {
     alert("Push não suportado neste navegador.");
     atualizarChipAlerta("SEM PUSH", "warn");
@@ -561,6 +559,31 @@ async function ativarPushEntregador() {
     alert("Erro ao ativar notificações push.");
   }
 }
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  if ("Notification" in window) {
+    if (Notification.permission === "granted") {
+      atualizarChipAlerta("ALERTAS ATIVADOS", "ok");
+    } else if (Notification.permission === "denied") {
+      atualizarChipAlerta("PERMISSÃO NEGADA", "warn");
+    }
+  }
+
+  if ("serviceWorker" in navigator) {
+    try {
+      await navigator.serviceWorker.register("/sw.js");
+    } catch (e) {
+      console.error("Erro ao registrar service worker:", e);
+    }
+  }
+});
 
 async function enviarPosicao(pedidoId, latitude, longitude) {
   try {
