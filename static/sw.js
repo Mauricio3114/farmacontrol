@@ -1,28 +1,9 @@
-const CACHE_NAME = "pharmaflow-v2";
-const urlsToCache = [
-  "/",
-  "/login",
-  "/entregador/app",
-  "/static/style.css",
-  "/static/app.js",
-  "/manifest.json"
-];
-
 self.addEventListener("install", event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil(self.clients.claim());
-});
-
-self.addEventListener("fetch", event => {
-  event.respondWith(
-    caches.match(event.request).then(response => response || fetch(event.request))
-  );
 });
 
 self.addEventListener("push", event => {
@@ -36,10 +17,7 @@ self.addEventListener("push", event => {
   try {
     if (event.data) {
       const payload = event.data.json();
-      data = {
-        ...data,
-        ...payload
-      };
+      data = { ...data, ...payload };
     }
   } catch (e) {
     console.error("Erro ao ler payload do push:", e);

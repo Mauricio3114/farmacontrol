@@ -1562,8 +1562,8 @@ def registrar_rotas(app):
                         break
 
             if entregador_valido:
-                session["entregador_id"] = entregador_valido.id
                 session.clear()
+                session["entregador_id"] = entregador_valido.id
                 flash("Login realizado com sucesso.", "success")
                 return redirect(url_for("entregador_app"))
 
@@ -1573,8 +1573,7 @@ def registrar_rotas(app):
 
     @app.route("/entregador/logout")
     def entregador_logout():
-        session.pop("entregador_id", None)
-        session.pop("entregador_farmacia_id", None)
+        session.clear()
         flash("Você saiu da área do entregador.", "info")
         return redirect(url_for("entregador_login"))
 
