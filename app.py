@@ -2227,6 +2227,16 @@ def registrar_rotas(app):
         return app.send_static_file("sw.js")
 
 
+    @app.route("/privacy")
+    def privacy():
+        return """
+        <h1>Política de Privacidade</h1>
+        <p>O FarmaControl coleta apenas dados necessários para operação de pedidos e entregas.</p>
+        <p>Não compartilhamos dados com terceiros.</p>
+        <p>Os dados são utilizados apenas para funcionamento do sistema.</p>
+        """
+
+
 app = create_app()
 
 if __name__ == "__main__":
