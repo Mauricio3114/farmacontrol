@@ -354,6 +354,18 @@ def link_waze(endereco: str) -> str:
     return f"https://waze.com/ul?q={destino}&navigate=yes"
 
 
+def normalizar_telefone_br(numero: str) -> str:
+    numero_limpo = "".join(ch for ch in (numero or "") if ch.isdigit())
+
+    if not numero_limpo:
+        return ""
+
+    if numero_limpo.startswith("55"):
+        return f"+{numero_limpo}"
+
+    return f"+55{numero_limpo}"
+
+
 def link_whatsapp(numero: str, mensagem: str) -> str:
     numero_limpo = "".join(ch for ch in (numero or "") if ch.isdigit())
     texto = quote_plus(mensagem)
@@ -361,7 +373,8 @@ def link_whatsapp(numero: str, mensagem: str) -> str:
 
 
 def numero_whatsapp_formatado(numero: str) -> str:
-    return "".join(ch for ch in (numero or "") if ch.isdigit())
+    numero_normalizado = normalizar_telefone_br(numero)
+    return "".join(ch for ch in numero_normalizado if ch.isdigit())
 
 
 def criar_log_whatsapp(
@@ -1025,8 +1038,14 @@ def registrar_rotas(app):
             endereco = request.form.get("endereco", "").strip()
             bairro = request.form.get("bairro", "").strip()
 
+            telefone = normalizar_telefone_br(telefone)
+
             if not nome or not telefone or not endereco:
                 flash("Preencha nome, telefone e endereço do cliente.", "warning")
+                return redirect(url_for("clientes"))
+
+            if len("".join(ch for ch in telefone if ch.isdigit())) < 12:
+                flash("Informe um telefone válido com DDD e número.", "warning")
                 return redirect(url_for("clientes"))
 
             novo = Cliente(
