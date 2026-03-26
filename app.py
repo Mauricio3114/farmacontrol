@@ -70,6 +70,10 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
+    # sessão do entregador fica salva por mais tempo
+    app.config["SESSION_PERMANENT"] = True
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "login"
@@ -1582,6 +1586,7 @@ def registrar_rotas(app):
 
             if entregador_valido:
                 session.clear()
+                session.permanent = True
                 session["entregador_id"] = entregador_valido.id
                 flash("Login realizado com sucesso.", "success")
                 return redirect(url_for("entregador_app"))
