@@ -345,8 +345,8 @@
 
           <td>
             {% if pedido.criado_em %}
-              <div>{{ pedido.criado_em.strftime("%d/%m/%Y") }}</div>
-              <div class="hora-coluna">{{ pedido.criado_em.strftime("%H:%M") }}</div>
+              <div>{{ pedido.criado_em | data_br }}</div>
+              <div class="hora-coluna">{{ pedido.criado_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}
@@ -354,8 +354,8 @@
 
           <td>
             {% if pedido.saiu_entrega_em %}
-              <div>{{ pedido.saiu_entrega_em.strftime("%d/%m/%Y") }}</div>
-              <div class="hora-coluna">{{ pedido.saiu_entrega_em.strftime("%H:%M") }}</div>
+              <div>{{ pedido.saiu_entrega_em | data_br }}</div>
+              <div class="hora-coluna">{{ pedido.saiu_entrega_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}
@@ -363,8 +363,8 @@
 
           <td>
             {% if pedido.entregue_em %}
-              <div>{{ pedido.entregue_em.strftime("%d/%m/%Y") }}</div>
-              <div class="hora-coluna">{{ pedido.entregue_em.strftime("%H:%M") }}</div>
+              <div>{{ pedido.entregue_em | data_br }}</div>
+              <div class="hora-coluna">{{ pedido.entregue_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}
@@ -756,7 +756,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   const dados = {{ dados_grafico | tojson | safe }};
-  console.log("dados_grafico:", dados);
 
   if (!dados || !Array.isArray(dados) || dados.length === 0) {
     console.log("Sem dados para o gráfico.");

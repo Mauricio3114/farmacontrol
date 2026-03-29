@@ -18,28 +18,43 @@
   </div>
 
   <form method="get" class="form-grid">
-    <div>
-      <label for="inicio">Data inicial</label>
-      <input type="date" id="inicio" name="inicio" value="{{ inicio or '' }}">
-    </div>
 
-    <div>
-      <label for="fim">Data final</label>
-      <input type="date" id="fim" name="fim" value="{{ fim or '' }}">
-    </div>
+  <div>
+    <label for="inicio">Data inicial</label>
+    <input type="date" id="inicio" name="inicio" value="{{ inicio or '' }}">
+  </div>
 
-    <div style="display:flex; align-items:end; gap:10px; flex-wrap:wrap;">
-      <button type="submit" class="btn btn-primary">Filtrar</button>
+  <div>
+    <label for="farmacia_id">Farmácia</label>
+    <select id="farmacia_id" name="farmacia_id">
+      <option value="todas">TODAS AS FARMÁCIAS</option>
 
-      <a
-        class="btn btn-secondary"
-        href="{{ url_for('relatorios_pdf', inicio=inicio, fim=fim) }}"
-        target="_blank"
-      >
-        Baixar PDF
-      </a>
-    </div>
-  </form>
+      {% for f in farmacias_usuario %}
+        <option value="{{ f.id }}" {% if farmacia_id == f.id|string %}selected{% endif %}>
+          {{ f.nome }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label for="fim">Data final</label>
+    <input type="date" id="fim" name="fim" value="{{ fim or '' }}">
+  </div>
+
+  <div style="display:flex; align-items:end; gap:10px; flex-wrap:wrap;">
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+
+    <a
+      class="btn btn-secondary"
+      href="{{ url_for('relatorios_pdf', inicio=inicio, fim=fim, farmacia_id=farmacia_id) }}"
+      target="_blank"
+    >
+      Baixar PDF
+    </a>
+  </div>
+
+</form>
 </div>
 
 <div class="cards-grid">
@@ -136,24 +151,24 @@
           </td>
           <td>
             {% if p.criado_em %}
-              <div>{{ p.criado_em.strftime("%d/%m/%Y") }}</div>
-              <div class="muted" style="font-size:12px;">{{ p.criado_em.strftime("%H:%M") }}</div>
+              <div>{{ p.criado_em | data_br }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.criado_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if p.saiu_entrega_em %}
-              <div>{{ p.saiu_entrega_em.strftime("%d/%m/%Y") }}</div>
-              <div class="muted" style="font-size:12px;">{{ p.saiu_entrega_em.strftime("%H:%M") }}</div>
+              <div>{{ p.saiu_entrega_em | data_br }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.saiu_entrega_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}
           </td>
           <td>
             {% if p.entregue_em %}
-              <div>{{ p.entregue_em.strftime("%d/%m/%Y") }}</div>
-              <div class="muted" style="font-size:12px;">{{ p.entregue_em.strftime("%H:%M") }}</div>
+              <div>{{ p.entregue_em | data_br }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.entregue_em | hora_br }}</div>
             {% else %}
               -
             {% endif %}

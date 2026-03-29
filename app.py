@@ -35,10 +35,20 @@ from models import (
 # HORÁRIO PADRÃO DO SISTEMA
 # =========================
 TZ_BRASIL = ZoneInfo("America/Fortaleza")
+TZ_UTC = ZoneInfo("UTC")
 
 def agora_brasil():
     return datetime.now(TZ_BRASIL).replace(tzinfo=None)
 
+def horario_brasil(valor):
+    if not valor:
+        return ""
+
+    # Se vier sem timezone, na produção normalmente está em UTC
+    if valor.tzinfo is None:
+        valor = valor.replace(tzinfo=TZ_UTC)
+
+    return valor.astimezone(TZ_BRASIL)
 
 # =========================
 # WHATSAPP (ENVIO TEMPLATE)
@@ -92,13 +102,6 @@ os.makedirs(INSTANCE_DIR, exist_ok=True)
 DB_PATH = os.path.join(INSTANCE_DIR, "farmacia.db")
 
 
-def agora_brasil():
-    try:
-        return datetime.now(ZoneInfo("America/Fortaleza"))
-    except Exception:
-        return datetime.now()
-
-
 def gerar_codigo_rastreio():
     return secrets.token_urlsafe(8).replace("-", "").replace("_", "")
 
@@ -130,6 +133,24 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = "login"
+
+    @app.template_filter("datahora_br")
+    def datahora_br_filter(valor, formato="%d/%m/%Y %H:%M"):
+        if not valor:
+            return "-"
+        return horario_brasil(valor).strftime(formato)
+
+    @app.template_filter("data_br")
+    def data_br_filter(valor, formato="%d/%m/%Y"):
+        if not valor:
+            return "-"
+        return horario_brasil(valor).strftime(formato)
+
+    @app.template_filter("hora_br")
+    def hora_br_filter(valor, formato="%H:%M"):
+        if not valor:
+            return "-"
+        return horario_brasil(valor).strftime(formato)
 
     with app.app_context():
         db.create_all()
