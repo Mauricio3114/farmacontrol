@@ -314,8 +314,15 @@ def farmacias_ids_do_usuario():
             f.id for f in Farmacia.query.filter_by(ativo=True, status="ativa").all()
         ]
 
-    ids = list(current_user.farmacias_ids or [])
+    # Busca direto da tabela de vínculo, sem depender de current_user.farmacias_ids
+    vinculos = UsuarioFarmacia.query.filter_by(
+        usuario_id=current_user.id,
+        ativo=True
+    ).all()
 
+    ids = [v.farmacia_id for v in vinculos if v.farmacia_id]
+
+    # fallback para legado
     if not ids and current_user.farmacia_id:
         ids = [current_user.farmacia_id]
 
@@ -326,7 +333,7 @@ def farmacias_ids_do_usuario():
         Farmacia.id.in_(ids),
         Farmacia.ativo.is_(True),
         Farmacia.status == "ativa"
-    ).all()
+    ).order_by(Farmacia.nome.asc()).all()
 
     return [f.id for f in farmacias_validas]
 
@@ -2440,16 +2447,38 @@ def registrar_rotas(app):
             flash("Área disponível apenas para usuários de farmácia.", "warning")
             return redirect(url_for("dashboard"))
 
-        farmacia_id = farmacia_ativa_id()
-        if not farmacia_id:
-            flash("Nenhuma farmácia ativa selecionada.", "warning")
+        ids_usuario = farmacias_ids_do_usuario()
+        if not ids_usuario:
+            flash("Nenhuma farmácia ativa vinculada ao seu login.", "warning")
             return redirect(url_for("dashboard"))
 
+        farmacias_usuario = Farmacia.query.filter(
+            Farmacia.id.in_(ids_usuario),
+            Farmacia.ativo.is_(True),
+            Farmacia.status == "ativa"
+        ).order_by(Farmacia.nome.asc()).all()
+
+        farmacia_id_param = request.args.get("farmacia_id", "todas").strip()
         inicio = request.args.get("inicio", "").strip()
         fim = request.args.get("fim", "").strip()
 
-        query = Pedido.query.filter_by(farmacia_id=farmacia_id)
+        query = Pedido.query.filter(Pedido.farmacia_id.in_(ids_usuario))
 
+        # FILTRO DE FARMÁCIA
+        if farmacia_id_param != "todas":
+            try:
+                farmacia_id_escolhida = int(farmacia_id_param)
+            except ValueError:
+                flash("Farmácia inválida.", "danger")
+                return redirect(url_for("relatorios"))
+
+            if farmacia_id_escolhida not in ids_usuario:
+                flash("Você não tem acesso a essa farmácia.", "danger")
+                return redirect(url_for("relatorios"))
+
+            query = query.filter(Pedido.farmacia_id == farmacia_id_escolhida)
+
+        # FILTRO DE DATA
         if inicio:
             try:
                 data_inicio = datetime.strptime(inicio, "%Y-%m-%d")
@@ -2483,7 +2512,9 @@ def registrar_rotas(app):
             total_separacao=total_separacao,
             total_saiu_entrega=total_saiu_entrega,
             inicio=inicio,
-            fim=fim
+            fim=fim,
+            farmacias_usuario=farmacias_usuario,
+            farmacia_id=farmacia_id_param
         )
 
     @app.route("/relatorios/pdf")
@@ -2492,15 +2523,44 @@ def registrar_rotas(app):
         if current_user.is_master:
             return redirect(url_for("dashboard"))
 
-        farmacia_id = farmacia_ativa_id()
-        if not farmacia_id:
+        ids_usuario = farmacias_ids_do_usuario()
+        if not ids_usuario:
             return redirect(url_for("dashboard"))
 
+        farmacias_usuario = Farmacia.query.filter(
+            Farmacia.id.in_(ids_usuario),
+            Farmacia.ativo.is_(True),
+            Farmacia.status == "ativa"
+        ).order_by(Farmacia.nome.asc()).all()
+
+        farmacia_id_param = request.args.get("farmacia_id", "todas").strip()
         inicio = request.args.get("inicio", "").strip()
         fim = request.args.get("fim", "").strip()
 
-        query = Pedido.query.filter_by(farmacia_id=farmacia_id)
+        query = Pedido.query.filter(Pedido.farmacia_id.in_(ids_usuario))
 
+        # FILTRO DE FARMÁCIA
+        if farmacia_id_param != "todas":
+            try:
+                farmacia_id_escolhida = int(farmacia_id_param)
+            except ValueError:
+                return redirect(url_for("relatorios"))
+
+            if farmacia_id_escolhida not in ids_usuario:
+                return redirect(url_for("relatorios"))
+
+            query = query.filter(Pedido.farmacia_id == farmacia_id_escolhida)
+
+            farmacia = Farmacia.query.filter(
+                Farmacia.id == farmacia_id_escolhida,
+                Farmacia.ativo.is_(True),
+                Farmacia.status == "ativa"
+            ).first()
+            nome_farmacia = farmacia.nome if farmacia else "Farmácia"
+        else:
+            nome_farmacia = "TODAS AS FARMÁCIAS"
+
+        # FILTRO DE DATA
         if inicio:
             try:
                 data_inicio = datetime.strptime(inicio, "%Y-%m-%d")
@@ -2550,18 +2610,6 @@ def registrar_rotas(app):
             spaceAfter=10
         )
 
-        texto_style = ParagraphStyle(
-            "TextoRelatorio",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=8,
-            leading=10,
-            textColor=colors.HexColor("#111827")
-        )
-
-        farmacia = farmacia_do_usuario_logado()
-        nome_farmacia = farmacia.nome if farmacia else "Farmácia"
-
         periodo_texto = "Período completo"
         if inicio and fim:
             periodo_texto = f"Período: {datetime.strptime(inicio, '%Y-%m-%d').strftime('%d/%m/%Y')} até {datetime.strptime(fim, '%Y-%m-%d').strftime('%d/%m/%Y')}"
@@ -2579,7 +2627,7 @@ def registrar_rotas(app):
         elementos.append(Paragraph(f"Relatório de Pedidos - {nome_farmacia}", titulo_style))
         elementos.append(Paragraph(periodo_texto, subtitulo_style))
         elementos.append(Paragraph(
-            f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            f"Gerado em: {agora_brasil().strftime('%d/%m/%Y %H:%M')}",
             subtitulo_style
         ))
         elementos.append(Spacer(1, 10))
@@ -2619,9 +2667,9 @@ def registrar_rotas(app):
             entregador_nome = p.entregador.nome if p.entregador else "-"
             status_formatado = (p.status or "-").replace("_", " ").upper()
 
-            criado_em = p.criado_em.strftime("%d/%m/%Y %H:%M") if p.criado_em else "-"
-            saiu_em = p.saiu_entrega_em.strftime("%d/%m/%Y %H:%M") if p.saiu_entrega_em else "-"
-            entregue_em = p.entregue_em.strftime("%d/%m/%Y %H:%M") if p.entregue_em else "-"
+            criado_em = horario_brasil(p.criado_em).strftime("%d/%m/%Y %H:%M") if p.criado_em else "-"
+            saiu_em = horario_brasil(p.saiu_entrega_em).strftime("%d/%m/%Y %H:%M") if p.saiu_entrega_em else "-"
+            entregue_em = horario_brasil(p.entregue_em).strftime("%d/%m/%Y %H:%M") if p.entregue_em else "-"
 
             dados.append([
                 f"#{p.id}",
