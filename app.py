@@ -37,7 +37,7 @@ from models import (
 TZ_BRASIL = ZoneInfo("America/Fortaleza")
 
 def agora_brasil():
-    return datetime.now(TZ_BRASIL)
+    return datetime.now(TZ_BRASIL).replace(tzinfo=None)
 
 
 # =========================
@@ -1579,6 +1579,8 @@ def registrar_rotas(app):
             if status == "saiu_entrega":
                 novo.saiu_entrega_em = agora_brasil()
             elif status == "entregue":
+                if not novo.saiu_entrega_em:
+                    novo.saiu_entrega_em = agora_brasil()
                 novo.entregue_em = agora_brasil()
 
             db.session.add(novo)
@@ -1671,17 +1673,21 @@ def registrar_rotas(app):
 
         pedido.status = novo_status
 
-        if novo_status == "saiu_entrega" and not pedido.saiu_entrega_em:
+        if novo_status == "saiu_entrega":
             pedido.saiu_entrega_em = agora_brasil()
+            pedido.entregue_em = None
 
-        if novo_status == "entregue":
+        elif novo_status == "entregue":
             if not pedido.saiu_entrega_em:
                 pedido.saiu_entrega_em = agora_brasil()
             pedido.entregue_em = agora_brasil()
 
+        elif novo_status in ["recebido", "separacao"]:
+            pedido.saiu_entrega_em = None
+            pedido.entregue_em = None
+
         db.session.commit()
 
-        # RECEBIDO: envia sempre que alguém marcar como recebido
         if novo_status == "recebido":
             enviar_whatsapp_template(
                 pedido.cliente.telefone,
