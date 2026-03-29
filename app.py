@@ -31,6 +31,14 @@ from models import (
     EntregadorPushSubscription
 )
 
+# =========================
+# HORÁRIO PADRÃO DO SISTEMA
+# =========================
+TZ_BRASIL = ZoneInfo("America/Fortaleza")
+
+def agora_brasil():
+    return datetime.now(TZ_BRASIL)
+
 
 # =========================
 # WHATSAPP (ENVIO TEMPLATE)
@@ -936,7 +944,7 @@ def registrar_rotas(app):
         ).order_by(Pedido.id.desc()).limit(10).all()
 
         # 🔥 GRÁFICO
-        hoje_dt = datetime.utcnow()
+        hoje_dt = agora_brasil()
         hoje = hoje_dt.date()
         dados_grafico = []
 
@@ -1564,7 +1572,8 @@ def registrar_rotas(app):
                 cliente_id=cliente.id,
                 entregador_id=entregador.id,
                 status=status,
-                codigo_rastreio=codigo
+                codigo_rastreio=codigo,
+                criado_em=agora_brasil()
             )
 
             if status == "saiu_entrega":
@@ -1666,6 +1675,8 @@ def registrar_rotas(app):
             pedido.saiu_entrega_em = agora_brasil()
 
         if novo_status == "entregue":
+            if not pedido.saiu_entrega_em:
+                pedido.saiu_entrega_em = agora_brasil()
             pedido.entregue_em = agora_brasil()
 
         db.session.commit()
@@ -2572,8 +2583,8 @@ def registrar_rotas(app):
         elementos.append(Spacer(1, 16))
 
         dados = [[
-            "Pedido", "Cliente", "Entregador", "Status",
-            "Criado em", "Saiu entrega", "Entregue em"
+            "Pedido", "Cliente", "Entregador",
+            "Criado em", "Saiu entrega", "Entregue em", "Status"
         ]]
 
         for p in pedidos:
@@ -2589,16 +2600,16 @@ def registrar_rotas(app):
                 f"#{p.id}",
                 cliente_nome,
                 entregador_nome,
-                status_formatado,
                 criado_em,
                 saiu_em,
-                entregue_em
+                entregue_em,
+                status_formatado
             ])
 
         tabela = Table(
             dados,
             repeatRows=1,
-            colWidths=[42, 105, 90, 78, 72, 72, 72]
+            colWidths=[42, 110, 90, 72, 72, 72, 78]
         )
         tabela.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
