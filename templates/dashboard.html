@@ -44,7 +44,7 @@
   {% endif %}
 </div>
 
-<div class="cards-grid">
+<div class="cards-grid dashboard-kpis-principais">
 
   <div class="card card-blue">
     <div class="card-top">
@@ -52,6 +52,7 @@
       <span class="card-icon">👤</span>
     </div>
     <div class="card-value">{{ total_clientes }}</div>
+    <div class="card-foot-info">Clientes cadastrados</div>
   </div>
 
   <div class="card card-green">
@@ -60,6 +61,7 @@
       <span class="card-icon">🛵</span>
     </div>
     <div class="card-value">{{ total_entregadores }}</div>
+    <div class="card-foot-info">Equipe ativa</div>
   </div>
 
   <div class="card card-purple">
@@ -68,6 +70,7 @@
       <span class="card-icon">📦</span>
     </div>
     <div class="card-value">{{ total_pedidos }}</div>
+    <div class="card-foot-info">Total geral</div>
   </div>
 
   <div class="card card-orange">
@@ -76,6 +79,7 @@
       <span class="card-icon">🚚</span>
     </div>
     <div class="card-value">{{ pedidos_entrega }}</div>
+    <div class="card-foot-info">Pedidos em rota</div>
   </div>
 
 </div>
@@ -88,6 +92,7 @@
       <span class="card-icon">📥</span>
     </div>
     <div class="card-value">{{ pedidos_recebidos }}</div>
+    <div class="card-foot-info">Aguardando andamento</div>
   </div>
 
   <div class="card card-yellow">
@@ -96,6 +101,7 @@
       <span class="card-icon">📦</span>
     </div>
     <div class="card-value">{{ pedidos_separacao }}</div>
+    <div class="card-foot-info">Preparação interna</div>
   </div>
 
   <div class="card card-green">
@@ -104,13 +110,203 @@
       <span class="card-icon">✅</span>
     </div>
     <div class="card-value">{{ pedidos_entregues }}</div>
+    <div class="card-foot-info">Finalizados com sucesso</div>
   </div>
 
 </div>
 
-<!-- 🔥 ÚLTIMOS PEDIDOS (SUBIU PRA CIMA) -->
+<div class="cards-grid comparativos-grid">
+
+  <div class="card card-metric">
+    <div class="card-top">
+      <span>Entregas do dia</span>
+      <span class="card-icon">📅</span>
+    </div>
+
+    <div class="card-value">{{ pedidos_hoje }}</div>
+
+    <div class="comparison-row">
+      <span class="comparison-label">Ontem: {{ pedidos_ontem }}</span>
+
+      <span class="comparison-badge
+        {% if crescimento_dia > 0 %}comparison-up
+        {% elif crescimento_dia < 0 %}comparison-down
+        {% else %}comparison-neutral{% endif %}
+      ">
+        {% if crescimento_dia > 0 %}
+          ↑ +{{ crescimento_dia }}%
+        {% elif crescimento_dia < 0 %}
+          ↓ {{ crescimento_dia }}%
+        {% else %}
+          • {{ crescimento_dia }}%
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="card card-metric">
+    <div class="card-top">
+      <span>Entregas da semana</span>
+      <span class="card-icon">📈</span>
+    </div>
+
+    <div class="card-value">{{ pedidos_semana }}</div>
+
+    <div class="comparison-row">
+      <span class="comparison-label">Semana anterior: {{ pedidos_semana_anterior }}</span>
+
+      <span class="comparison-badge
+        {% if crescimento_semana > 0 %}comparison-up
+        {% elif crescimento_semana < 0 %}comparison-down
+        {% else %}comparison-neutral{% endif %}
+      ">
+        {% if crescimento_semana > 0 %}
+          ↑ +{{ crescimento_semana }}%
+        {% elif crescimento_semana < 0 %}
+          ↓ {{ crescimento_semana }}%
+        {% else %}
+          • {{ crescimento_semana }}%
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="card card-metric">
+    <div class="card-top">
+      <span>Entregas do mês</span>
+      <span class="card-icon">🏆</span>
+    </div>
+
+    <div class="card-value">{{ pedidos_mes }}</div>
+
+    <div class="comparison-row">
+      <span class="comparison-label">Mês anterior: {{ pedidos_mes_anterior }}</span>
+
+      <span class="comparison-badge
+        {% if crescimento_mes > 0 %}comparison-up
+        {% elif crescimento_mes < 0 %}comparison-down
+        {% else %}comparison-neutral{% endif %}
+      ">
+        {% if crescimento_mes > 0 %}
+          ↑ +{{ crescimento_mes }}%
+        {% elif crescimento_mes < 0 %}
+          ↓ {{ crescimento_mes }}%
+        {% else %}
+          • {{ crescimento_mes }}%
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+</div>
+
+<div class="cards-grid comparativos-grid">
+
+  <div class="card card-metric">
+    <div class="card-top">
+      <span>Tempo médio de entrega</span>
+      <span class="card-icon">⏱️</span>
+    </div>
+
+    <div class="card-value">
+      {{ tempo_medio_entrega_min }} <span style="font-size:16px;">min</span>
+    </div>
+
+    <div class="comparison-row">
+      <span class="comparison-label">Baseado nas entregas concluídas</span>
+    </div>
+  </div>
+
+  <div class="card card-metric">
+    <div class="card-top">
+      <span>Melhor entregador</span>
+      <span class="card-icon">🏆</span>
+    </div>
+
+    <div class="card-value card-value-name">
+      {{ melhor_entregador.nome if melhor_entregador else "Sem dados" }}
+    </div>
+
+    <div class="comparison-row">
+      <span class="comparison-label">
+        {% if melhor_entregador %}
+          {{ melhor_entregador.total_entregas }} entregas • {{ melhor_entregador.tempo_medio }} min
+        {% else %}
+          Nenhuma entrega concluída
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+</div>
+
 <div class="panel">
-  <h2>Últimos Pedidos</h2>
+  <div class="panel-head-flex">
+    <div>
+      <h2>Desempenho de pedidos</h2>
+      <p class="muted">Comparativo visual dos últimos 7 dias</p>
+    </div>
+  </div>
+
+  <div class="grafico-box">
+    <canvas id="graficoPedidos"></canvas>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head-flex">
+    <div>
+      <h2>Ranking de Entregadores</h2>
+      <p class="muted">Top 5 com mais entregas concluídas</p>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Entregador</th>
+          <th>Entregas</th>
+          <th>Tempo médio</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in ranking_entregadores %}
+        <tr>
+          <td><strong>{{ loop.index }}º</strong></td>
+          <td>{{ item.nome }}</td>
+          <td>{{ item.total_entregas }}</td>
+          <td>{{ item.tempo_medio }} min</td>
+          <td>
+            {% if loop.index == 1 %}
+              <span class="badge badge-gold">LÍDER</span>
+            {% elif loop.index == 2 %}
+              <span class="badge badge-silver">DESTAQUE</span>
+            {% else %}
+              <span class="badge badge-blue">TOP</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5">Nenhum entregador com entregas ainda.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head-flex">
+    <div>
+      <h2>Últimos Pedidos</h2>
+      <p class="muted">Agora com horários visíveis na operação</p>
+    </div>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -120,23 +316,64 @@
           <th>Cliente</th>
           <th>Endereço</th>
           <th>Entregador</th>
+          <th>Criado em</th>
+          <th>Saiu p/ entrega</th>
+          <th>Entregue em</th>
           <th>Status</th>
         </tr>
       </thead>
       <tbody>
         {% for pedido in ultimos_pedidos %}
-        <tr class="
-          {% if pedido.status == 'saiu_entrega' %}linha-em-rota{% endif %}
-        ">
-          <td>#{{ pedido.id }}</td>
+        <tr class="{% if pedido.status == 'saiu_entrega' %}linha-em-rota{% endif %}">
+
+          <td>
+            <strong>#{{ pedido.id }}</strong>
+          </td>
+
           <td>{{ pedido.farmacia.nome if pedido.farmacia else "-" }}</td>
-          <td>{{ pedido.cliente.nome }}</td>
-          <td>{{ pedido.cliente.endereco }}</td>
+
+          <td>
+            <div class="cliente-nome">{{ pedido.cliente.nome if pedido.cliente else "-" }}</div>
+            {% if pedido.cliente and pedido.cliente.bairro %}
+              <div class="cliente-bairro">{{ pedido.cliente.bairro }}</div>
+            {% endif %}
+          </td>
+
+          <td>{{ pedido.cliente.endereco if pedido.cliente else "-" }}</td>
+
           <td>{{ pedido.entregador.nome if pedido.entregador else "-" }}</td>
 
           <td>
-            <span class="badge 
+            {% if pedido.criado_em %}
+              <div>{{ pedido.criado_em.strftime("%d/%m/%Y") }}</div>
+              <div class="hora-coluna">{{ pedido.criado_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+
+          <td>
+            {% if pedido.saiu_entrega_em %}
+              <div>{{ pedido.saiu_entrega_em.strftime("%d/%m/%Y") }}</div>
+              <div class="hora-coluna">{{ pedido.saiu_entrega_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+
+          <td>
+            {% if pedido.entregue_em %}
+              <div>{{ pedido.entregue_em.strftime("%d/%m/%Y") }}</div>
+              <div class="hora-coluna">{{ pedido.entregue_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+
+          <td>
+            <span class="badge
               {% if pedido.status == 'recebido' %}badge-blue
+              {% elif pedido.status == 'separacao' %}badge-yellow
               {% elif pedido.status == 'saiu_entrega' %}badge-orange
               {% elif pedido.status == 'entregue' %}badge-green
               {% else %}badge-gray{% endif %}
@@ -144,10 +381,11 @@
               {{ pedido.status.replace('_', ' ').upper() }}
             </span>
           </td>
+
         </tr>
         {% else %}
         <tr>
-          <td colspan="6">Nenhum pedido cadastrado.</td>
+          <td colspan="9">Nenhum pedido cadastrado.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -155,7 +393,6 @@
   </div>
 </div>
 
-<!-- MAPA (DESCEU PRA BAIXO) -->
 <div class="panel">
   <div class="panel-head-flex">
     <div>
@@ -166,6 +403,295 @@
   <div id="mapa-entregadores" style="height: 420px; border-radius: 16px;"></div>
 </div>
 
+<style>
+.titulo-dashboard{
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  margin: 0 0 4px;
+}
+
+.subtitulo-dashboard{
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.bloco-farmacia-ativa{
+  margin-top: 12px;
+}
+
+.badge-farmacia-destaque{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  border: 1px solid rgba(148,163,184,.28);
+  box-shadow: 0 10px 30px rgba(15,23,42,.08);
+}
+
+.badge-farmacia-todas{
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color: #fff;
+}
+
+.badge-farmacia-unica{
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  color: #1d4ed8;
+}
+
+.select-chique{
+  min-width: 260px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 700;
+  outline: none;
+}
+
+.dashboard-kpis-principais{
+  margin-top: 8px;
+}
+
+.card{
+  position: relative;
+  overflow: hidden;
+}
+
+.card-top{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: rgba(255,255,255,.92);
+  font-weight: 700;
+}
+
+.card-icon{
+  font-size: 20px;
+}
+
+.card-value{
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.card-value-name{
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.card-foot-info{
+  font-size: 12px;
+  opacity: .9;
+}
+
+.card-blue{
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #fff;
+}
+
+.card-green{
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
+
+.card-purple{
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  color: #fff;
+}
+
+.card-orange{
+  background: linear-gradient(135deg, #ea580c, #f97316);
+  color: #fff;
+}
+
+.card-yellow{
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+  color: #fff;
+}
+
+.comparativos-grid{
+  margin-top: 2px;
+}
+
+.card-metric{
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 45px rgba(15,23,42,.06);
+}
+
+.card-metric .card-top{
+  color: #0f172a;
+}
+
+.card-metric .card-value{
+  color: #0f172a;
+  margin-bottom: 14px;
+}
+
+.comparison-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.comparison-label{
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.comparison-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .3px;
+}
+
+.comparison-up{
+  background: rgba(16,185,129,.12);
+  color: #047857;
+  border: 1px solid rgba(16,185,129,.22);
+}
+
+.comparison-down{
+  background: rgba(239,68,68,.10);
+  color: #b91c1c;
+  border: 1px solid rgba(239,68,68,.18);
+}
+
+.comparison-neutral{
+  background: rgba(148,163,184,.14);
+  color: #475569;
+  border: 1px solid rgba(148,163,184,.22);
+}
+
+.grafico-box{
+  position: relative;
+  min-height: 320px;
+}
+
+.cliente-nome{
+  font-weight: 700;
+}
+
+.cliente-bairro{
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.hora-coluna{
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+.linha-em-rota{
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+
+.badge-blue{
+  background: rgba(37,99,235,.12);
+  color: #1d4ed8;
+  border: 1px solid rgba(37,99,235,.18);
+}
+
+.badge-yellow{
+  background: rgba(245,158,11,.14);
+  color: #b45309;
+  border: 1px solid rgba(245,158,11,.2);
+}
+
+.badge-orange{
+  background: rgba(249,115,22,.12);
+  color: #c2410c;
+  border: 1px solid rgba(249,115,22,.18);
+}
+
+.badge-green{
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  font-weight: 900;
+  box-shadow: 0 4px 12px rgba(16,185,129,0.4);
+}
+
+.badge-gray{
+  background: rgba(148,163,184,.14);
+  color: #475569;
+  border: 1px solid rgba(148,163,184,.2);
+}
+
+.badge-gold{
+  background: linear-gradient(135deg, #f59e0b, #facc15);
+  color: #111827;
+  border: none;
+  font-weight: 900;
+  box-shadow: 0 4px 12px rgba(245,158,11,0.35);
+}
+
+.badge-silver{
+  background: linear-gradient(135deg, #cbd5e1, #e2e8f0);
+  color: #0f172a;
+  border: none;
+  font-weight: 900;
+}
+
+@media (max-width: 900px){
+  .titulo-dashboard{
+    font-size: 22px;
+  }
+
+  .card-value{
+    font-size: 28px;
+  }
+
+  .card-value-name{
+    font-size: 18px;
+  }
+
+  .comparison-row{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .select-chique{
+    min-width: 100%;
+    width: 100%;
+  }
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -216,36 +742,81 @@ setInterval(carregarMapaEntregadores, 5000);
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-const dados = {{ dados_grafico | tojson }};
+document.addEventListener("DOMContentLoaded", function () {
+  const canvas = document.getElementById("graficoPedidos");
+  if (!canvas) {
+    console.log("Canvas do gráfico não encontrado.");
+    return;
+  }
 
-const labels = dados.map(d => d.dia);
-const valores = dados.map(d => d.total);
+  const dados = {{ dados_grafico | tojson | safe }};
+  console.log("dados_grafico:", dados);
 
-const ctx = document.getElementById('graficoPedidos');
+  if (!dados || !Array.isArray(dados) || dados.length === 0) {
+    console.log("Sem dados para o gráfico.");
+    return;
+  }
 
-new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: labels,
-    datasets: [{
-      label: 'Pedidos',
-      data: valores,
-      tension: 0.4,
-      fill: true,
-      borderColor: '#2563eb',
-      backgroundColor: 'rgba(37, 99, 235, 0.1)'
-    }]
-  },
-  options: {
-    plugins: {
-      legend: { display: false }
+  const labels = dados.map(item => item.dia);
+  const valores = dados.map(item => item.total);
+
+  new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "Pedidos",
+        data: valores,
+        tension: 0.4,
+        fill: true,
+        borderWidth: 3,
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59, 130, 246, 0.15)",
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: "#3b82f6",
+        pointBorderWidth: 3,
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
     },
-    scales: {
-      y: {
-        beginAtZero: true
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#020617",
+          titleColor: "#fff",
+          bodyColor: "#fff",
+          padding: 14,
+          borderColor: "#3b82f6",
+          borderWidth: 1,
+          displayColors: false
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#94a3b8",
+            font: { weight: "700" }
+          },
+          grid: {
+            display: false
+          }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "#94a3b8",
+            precision: 0
+          },
+          grid: {
+            color: "rgba(148,163,184,0.15)"
+          }
+        }
       }
     }
-  }
+  });
 });
 </script>
 {% endblock %}

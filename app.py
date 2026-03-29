@@ -16,10 +16,10 @@ from flask_login import (
     login_user, login_required, logout_user,
     current_user
 )
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from pywebpush import webpush, WebPushException
 
@@ -30,6 +30,51 @@ from models import (
     WhatsAppConfig, WhatsAppLog, UsuarioFarmacia, EntregadorFarmacia,
     EntregadorPushSubscription
 )
+
+
+# =========================
+# WHATSAPP (ENVIO TEMPLATE)
+# =========================
+def enviar_whatsapp_template(telefone, template_nome, parametros):
+    config = WhatsAppConfig.query.first()
+
+    if not config or not config.ativo:
+        return
+
+    if not config.access_token or not config.phone_number_id:
+        return
+
+    url = f"https://graph.facebook.com/v22.0/{config.phone_number_id}/messages"
+
+    headers = {
+        "Authorization": f"Bearer {config.access_token}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "messaging_product": "whatsapp",
+        "to": telefone,
+        "type": "template",
+        "template": {
+            "name": template_nome,
+            "language": {
+                "code": "pt_BR"
+            },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": str(p)} for p in parametros
+                    ]
+                }
+            ]
+        }
+    }
+
+    try:
+        requests.post(url, headers=headers, json=data, timeout=20)
+    except Exception:
+        pass
 
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -414,6 +459,99 @@ def obter_config_whatsapp(farmacia_id):
     return WhatsAppConfig.query.filter_by(farmacia_id=farmacia_id).first()
 
 
+def enviar_template_whatsapp(
+    numero,
+    farmacia_id,
+    template_nome,
+    pedido_id=None,
+    tipo="template",
+    components=None
+):
+    cfg = obter_config_whatsapp(farmacia_id)
+
+    if not cfg or not cfg.ativo:
+        return {
+            "ok": False,
+            "mensagem": "WhatsApp não está ativo nas configurações."
+        }
+
+    if not cfg.access_token or not cfg.phone_number_id:
+        return {
+            "ok": False,
+            "mensagem": "Credenciais do WhatsApp incompletas."
+        }
+
+    if not template_nome:
+        return {
+            "ok": False,
+            "mensagem": "Nome do template não informado."
+        }
+
+    numero_limpo = numero_whatsapp_formatado(numero)
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero_limpo,
+        "type": "template",
+        "template": {
+            "name": template_nome,
+            "language": {
+                "code": "pt_BR"
+            }
+        }
+    }
+
+    if components:
+        payload["template"]["components"] = components
+
+    url = f"https://graph.facebook.com/v23.0/{cfg.phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {cfg.access_token}",
+        "Content-Type": "application/json"
+    }
+
+    log = criar_log_whatsapp(
+        tipo=tipo,
+        farmacia_id=farmacia_id,
+        destino=numero_limpo,
+        template_nome=template_nome,
+        pedido_id=pedido_id,
+        status="enviando"
+    )
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=20)
+        resposta_texto = resp.text
+
+        if resp.ok:
+            log.status = "enviado"
+            log.resposta_api = resposta_texto
+            db.session.commit()
+            return {
+                "ok": True,
+                "mensagem": "Template enviado com sucesso.",
+                "resposta": resposta_texto
+            }
+
+        log.status = "erro"
+        log.resposta_api = resposta_texto
+        db.session.commit()
+        return {
+            "ok": False,
+            "mensagem": "Erro ao enviar template.",
+            "resposta": resposta_texto
+        }
+
+    except Exception as e:
+        log.status = "erro"
+        log.resposta_api = str(e)
+        db.session.commit()
+        return {
+            "ok": False,
+            "mensagem": f"Falha na conexão com WhatsApp: {str(e)}"
+        }
+
+
 def enviar_texto_whatsapp(numero, mensagem, farmacia_id, pedido_id=None, tipo="texto_manual"):
     cfg = obter_config_whatsapp(farmacia_id)
 
@@ -493,17 +631,13 @@ def disparar_whatsapp_pedido_recebido(pedido):
     if not cfg or not cfg.ativo or not cfg.enviar_pedido_recebido:
         return
 
-    mensagem = (
-        f"Olá, {pedido.cliente.nome}! "
-        f"Recebemos seu pedido #{pedido.id} e já estamos preparando tudo."
-    )
-
-    enviar_texto_whatsapp(
-        numero=pedido.cliente.telefone,
-        mensagem=mensagem,
-        farmacia_id=pedido.farmacia_id,
-        pedido_id=pedido.id,
-        tipo="pedido_recebido"
+    enviar_whatsapp_template(
+        pedido.cliente.telefone,
+        "pedido_recebido",
+        [
+            pedido.cliente.nome,
+            pedido.id
+        ]
     )
 
 
@@ -512,24 +646,30 @@ def disparar_whatsapp_saiu_entrega(pedido):
     if not cfg or not cfg.ativo or not cfg.enviar_saiu_entrega:
         return
 
-    link_rastreio = url_for(
-        "rastreio_cliente",
-        codigo=pedido.codigo_rastreio,
-        _external=True
-    )
+    numero = pedido.cliente.telefone
+    link_rastreio = url_for("rastreio_cliente", codigo=pedido.codigo_rastreio, _external=True)
+
+    if cfg.nome_template_saiu_entrega:
+        enviar_template_whatsapp(
+            numero=numero,
+            farmacia_id=pedido.farmacia_id,
+            template_nome=cfg.nome_template_saiu_entrega,
+            pedido_id=pedido.id,
+            tipo="saiu_entrega"
+        )
 
     mensagem = (
-        f"Olá, {pedido.cliente.nome}! "
-        f"Seu pedido #{pedido.id} saiu para entrega. "
-        f"Acompanhe aqui: {link_rastreio}"
+        f"Olá, {pedido.cliente.nome}!\n\n"
+        f"Seu pedido saiu para entrega.\n"
+        f"Acompanhe em tempo real aqui:\n{link_rastreio}"
     )
 
     enviar_texto_whatsapp(
-        numero=pedido.cliente.telefone,
+        numero=numero,
         mensagem=mensagem,
         farmacia_id=pedido.farmacia_id,
         pedido_id=pedido.id,
-        tipo="saiu_entrega"
+        tipo="saiu_entrega_link"
     )
 
 
@@ -538,18 +678,30 @@ def disparar_whatsapp_pedido_entregue(pedido):
     if not cfg or not cfg.ativo or not cfg.enviar_pedido_entregue:
         return
 
+    numero = pedido.cliente.telefone
+    link_rastreio = url_for("rastreio_cliente", codigo=pedido.codigo_rastreio, _external=True)
+
+    if cfg.nome_template_pedido_entregue:
+        enviar_template_whatsapp(
+            numero=numero,
+            farmacia_id=pedido.farmacia_id,
+            template_nome=cfg.nome_template_pedido_entregue,
+            pedido_id=pedido.id,
+            tipo="pedido_entregue"
+        )
+
     mensagem = (
-        f"Olá, {pedido.cliente.nome}! "
-        f"Seu pedido #{pedido.id} foi entregue. "
-        f"Obrigado pela preferência."
+        f"Olá, {pedido.cliente.nome}!\n\n"
+        f"Seu pedido foi entregue com sucesso.\n"
+        f"Se quiser acompanhar o histórico do pedido, acesse:\n{link_rastreio}"
     )
 
     enviar_texto_whatsapp(
-        numero=pedido.cliente.telefone,
+        numero=numero,
         mensagem=mensagem,
         farmacia_id=pedido.farmacia_id,
         pedido_id=pedido.id,
-        tipo="pedido_entregue"
+        tipo="pedido_entregue_link"
     )
 
 
@@ -746,9 +898,8 @@ def registrar_rotas(app):
             ids_consulta = ids
             farmacia = None
 
-        total_clientes = Cliente.query.filter(
-            Cliente.farmacia_id.in_(ids_consulta)
-        ).count()
+        # 🔹 KPIs básicos
+        total_clientes = Cliente.query.filter(Cliente.farmacia_id.in_(ids_consulta)).count()
 
         total_entregadores = db.session.query(Entregador.id).join(
             EntregadorFarmacia, EntregadorFarmacia.entregador_id == Entregador.id
@@ -758,9 +909,7 @@ def registrar_rotas(app):
             Entregador.ativo.is_(True)
         ).distinct().count()
 
-        total_pedidos = Pedido.query.filter(
-            Pedido.farmacia_id.in_(ids_consulta)
-        ).count()
+        total_pedidos = Pedido.query.filter(Pedido.farmacia_id.in_(ids_consulta)).count()
 
         pedidos_recebidos = Pedido.query.filter(
             Pedido.farmacia_id.in_(ids_consulta),
@@ -786,16 +935,17 @@ def registrar_rotas(app):
             Pedido.farmacia_id.in_(ids_consulta)
         ).order_by(Pedido.id.desc()).limit(10).all()
 
-        # 🔥 GRÁFICO (7 dias)
-        hoje = datetime.utcnow()
+        # 🔥 GRÁFICO
+        hoje_dt = datetime.utcnow()
+        hoje = hoje_dt.date()
         dados_grafico = []
 
         for i in range(6, -1, -1):
-            dia = hoje - timedelta(days=i)
+            dia = hoje_dt - timedelta(days=i)
 
             total = db.session.query(func.count(Pedido.id)).filter(
                 Pedido.farmacia_id.in_(ids_consulta),
-                func.date(Pedido.data_criacao) == dia.date()
+                func.date(Pedido.criado_em) == dia.date()
             ).scalar()
 
             dados_grafico.append({
@@ -803,21 +953,149 @@ def registrar_rotas(app):
                 "total": total or 0
             })
 
+        # 🔥 PERÍODOS
+        inicio_hoje = datetime.combine(hoje, datetime.min.time())
+        inicio_amanha = inicio_hoje + timedelta(days=1)
+        inicio_ontem = inicio_hoje - timedelta(days=1)
+
+        inicio_semana = inicio_hoje - timedelta(days=hoje.weekday())
+        inicio_proxima_semana = inicio_semana + timedelta(days=7)
+        inicio_semana_anterior = inicio_semana - timedelta(days=7)
+
+        inicio_mes = inicio_hoje.replace(day=1)
+
+        if inicio_mes.month == 12:
+            inicio_proximo_mes = inicio_mes.replace(year=inicio_mes.year + 1, month=1)
+        else:
+            inicio_proximo_mes = inicio_mes.replace(month=inicio_mes.month + 1)
+
+        if inicio_mes.month == 1:
+            inicio_mes_anterior = inicio_mes.replace(year=inicio_mes.year - 1, month=12)
+        else:
+            inicio_mes_anterior = inicio_mes.replace(month=inicio_mes.month - 1)
+
+        # 🔥 CONTAGENS
+        pedidos_hoje = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_hoje,
+            Pedido.criado_em < inicio_amanha
+        ).count()
+
+        pedidos_ontem = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_ontem,
+            Pedido.criado_em < inicio_hoje
+        ).count()
+
+        pedidos_semana = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_semana,
+            Pedido.criado_em < inicio_proxima_semana
+        ).count()
+
+        pedidos_semana_anterior = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_semana_anterior,
+            Pedido.criado_em < inicio_semana
+        ).count()
+
+        pedidos_mes = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_mes,
+            Pedido.criado_em < inicio_proximo_mes
+        ).count()
+
+        pedidos_mes_anterior = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.criado_em >= inicio_mes_anterior,
+            Pedido.criado_em < inicio_mes
+        ).count()
+
+        def calc(atual, anterior):
+            if anterior == 0:
+                return 100 if atual > 0 else 0
+            return round(((atual - anterior) / anterior) * 100, 1)
+
+        crescimento_dia = calc(pedidos_hoje, pedidos_ontem)
+        crescimento_semana = calc(pedidos_semana, pedidos_semana_anterior)
+        crescimento_mes = calc(pedidos_mes, pedidos_mes_anterior)
+
+        # 🔥 TEMPO MÉDIO
+        entregues = Pedido.query.filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "entregue",
+            Pedido.saiu_entrega_em.isnot(None),
+            Pedido.entregue_em.isnot(None)
+        ).all()
+
+        tempos = [
+            int((p.entregue_em - p.saiu_entrega_em).total_seconds() // 60)
+            for p in entregues if p.entregue_em and p.saiu_entrega_em
+        ]
+
+        tempo_medio_entrega_min = round(sum(tempos)/len(tempos),1) if tempos else 0
+
+        # 🔥 RANKING
+        ranking_raw = db.session.query(
+            Entregador.id,
+            Entregador.nome,
+            func.count(Pedido.id)
+        ).join(Pedido).filter(
+            Pedido.farmacia_id.in_(ids_consulta),
+            Pedido.status == "entregue"
+        ).group_by(Entregador.id).order_by(func.count(Pedido.id).desc()).limit(5).all()
+
+        ranking_entregadores = []
+        for id_e, nome, total in ranking_raw:
+            pedidos_e = Pedido.query.filter_by(entregador_id=id_e, status="entregue").all()
+            tempos_e = [
+                int((p.entregue_em - p.saiu_entrega_em).total_seconds() // 60)
+                for p in pedidos_e if p.entregue_em and p.saiu_entrega_em
+            ]
+            media = round(sum(tempos_e)/len(tempos_e),1) if tempos_e else 0
+
+            ranking_entregadores.append({
+                "nome": nome,
+                "total_entregas": total,
+                "tempo_medio": media
+            })
+
+        melhor_entregador = ranking_entregadores[0] if ranking_entregadores else None
+
         return render_template(
             "dashboard.html",
             farmacia=farmacia,
             farmacias_usuario=farmacias_usuario,
             farmacia_ativa_id=farmacia_id_filtrada,
             exibindo_todas_farmacias=(farmacia_id_filtrada is None and len(ids) > 1),
+
             total_clientes=total_clientes,
             total_entregadores=total_entregadores,
             total_pedidos=total_pedidos,
+
             pedidos_recebidos=pedidos_recebidos,
             pedidos_separacao=pedidos_separacao,
             pedidos_entrega=pedidos_entrega,
             pedidos_entregues=pedidos_entregues,
+
             ultimos_pedidos=ultimos_pedidos,
-            dados_grafico=dados_grafico
+            dados_grafico=dados_grafico,
+
+            pedidos_hoje=pedidos_hoje,
+            pedidos_ontem=pedidos_ontem,
+            crescimento_dia=crescimento_dia,
+
+            pedidos_semana=pedidos_semana,
+            pedidos_semana_anterior=pedidos_semana_anterior,
+            crescimento_semana=crescimento_semana,
+
+            pedidos_mes=pedidos_mes,
+            pedidos_mes_anterior=pedidos_mes_anterior,
+            crescimento_mes=crescimento_mes,
+
+            tempo_medio_entrega_min=tempo_medio_entrega_min,
+            ranking_entregadores=ranking_entregadores,
+            melhor_entregador=melhor_entregador
         )
 
     # =========================
@@ -1392,6 +1670,17 @@ def registrar_rotas(app):
 
         db.session.commit()
 
+        # RECEBIDO: envia sempre que alguém marcar como recebido
+        if novo_status == "recebido":
+            enviar_whatsapp_template(
+                pedido.cliente.telefone,
+                "pedido_recebido",
+                [
+                    pedido.cliente.nome,
+                    pedido.id
+                ]
+            )
+
         if pedido.entregador_id:
             status_label = novo_status
             if novo_status == "recebido":
@@ -1413,9 +1702,26 @@ def registrar_rotas(app):
 
         if status_anterior != novo_status:
             if novo_status == "saiu_entrega":
-                disparar_whatsapp_saiu_entrega(pedido)
+                link = url_for("rastreio_cliente", codigo=pedido.codigo_rastreio, _external=True)
+                enviar_whatsapp_template(
+                    pedido.cliente.telefone,
+                    "pedido_saiu_entrega",
+                    [
+                        pedido.cliente.nome,
+                        pedido.id,
+                        link
+                    ]
+                )
+
             elif novo_status == "entregue":
-                disparar_whatsapp_pedido_entregue(pedido)
+                enviar_whatsapp_template(
+                    pedido.cliente.telefone,
+                    "pedido_entregue",
+                    [
+                        pedido.cliente.nome,
+                        pedido.id
+                    ]
+                )
 
         flash("Status do pedido atualizado.", "success")
         return redirect(url_for("pedidos"))
@@ -2174,15 +2480,57 @@ def registrar_rotas(app):
         pedidos = query.order_by(Pedido.criado_em.desc()).all()
 
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=20,
+            leftMargin=20,
+            topMargin=24,
+            bottomMargin=20
+        )
+
         styles = getSampleStyleSheet()
         elementos = []
+
+        titulo_style = ParagraphStyle(
+            "TituloRelatorio",
+            parent=styles["Title"],
+            fontName="Helvetica-Bold",
+            fontSize=18,
+            leading=22,
+            textColor=colors.HexColor("#0f172a"),
+            spaceAfter=8
+        )
+
+        subtitulo_style = ParagraphStyle(
+            "SubtituloRelatorio",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9,
+            leading=12,
+            textColor=colors.HexColor("#475569"),
+            spaceAfter=10
+        )
+
+        texto_style = ParagraphStyle(
+            "TextoRelatorio",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            textColor=colors.HexColor("#111827")
+        )
 
         farmacia = farmacia_do_usuario_logado()
         nome_farmacia = farmacia.nome if farmacia else "Farmácia"
 
-        elementos.append(Paragraph(f"Relatório de Pedidos - {nome_farmacia}", styles["Title"]))
-        elementos.append(Spacer(1, 12))
+        periodo_texto = "Período completo"
+        if inicio and fim:
+            periodo_texto = f"Período: {datetime.strptime(inicio, '%Y-%m-%d').strftime('%d/%m/%Y')} até {datetime.strptime(fim, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+        elif inicio:
+            periodo_texto = f"Período: a partir de {datetime.strptime(inicio, '%Y-%m-%d').strftime('%d/%m/%Y')}"
+        elif fim:
+            periodo_texto = f"Período: até {datetime.strptime(fim, '%Y-%m-%d').strftime('%d/%m/%Y')}"
 
         total_pedidos = len(pedidos)
         total_entregues = sum(1 for p in pedidos if p.status == "entregue")
@@ -2190,7 +2538,16 @@ def registrar_rotas(app):
         total_separacao = sum(1 for p in pedidos if p.status == "separacao")
         total_saiu_entrega = sum(1 for p in pedidos if p.status == "saiu_entrega")
 
+        elementos.append(Paragraph(f"Relatório de Pedidos - {nome_farmacia}", titulo_style))
+        elementos.append(Paragraph(periodo_texto, subtitulo_style))
+        elementos.append(Paragraph(
+            f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+            subtitulo_style
+        ))
+        elementos.append(Spacer(1, 10))
+
         resumo = [
+            ["Indicador", "Quantidade"],
             ["Total de pedidos", str(total_pedidos)],
             ["Recebidos", str(total_recebidos)],
             ["Em separação", str(total_separacao)],
@@ -2198,36 +2555,61 @@ def registrar_rotas(app):
             ["Entregues", str(total_entregues)],
         ]
 
-        tabela_resumo = Table(resumo, colWidths=[180, 180])
+        tabela_resumo = Table(resumo, colWidths=[260, 180])
         tabela_resumo.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1d4ed8")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.whitesmoke),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+            ("ALIGN", (1, 1), (1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
         ]))
-
         elementos.append(tabela_resumo)
-        elementos.append(Spacer(1, 18))
+        elementos.append(Spacer(1, 16))
 
-        dados = [["Pedido", "Cliente", "Entregador", "Status", "Data"]]
+        dados = [[
+            "Pedido", "Cliente", "Entregador", "Status",
+            "Criado em", "Saiu entrega", "Entregue em"
+        ]]
 
         for p in pedidos:
+            cliente_nome = p.cliente.nome if p.cliente else "-"
+            entregador_nome = p.entregador.nome if p.entregador else "-"
+            status_formatado = (p.status or "-").replace("_", " ").upper()
+
+            criado_em = p.criado_em.strftime("%d/%m/%Y %H:%M") if p.criado_em else "-"
+            saiu_em = p.saiu_entrega_em.strftime("%d/%m/%Y %H:%M") if p.saiu_entrega_em else "-"
+            entregue_em = p.entregue_em.strftime("%d/%m/%Y %H:%M") if p.entregue_em else "-"
+
             dados.append([
                 f"#{p.id}",
-                p.cliente.nome if p.cliente else "-",
-                p.entregador.nome if p.entregador else "-",
-                p.status,
-                p.criado_em.strftime("%d/%m/%Y") if p.criado_em else "-"
+                cliente_nome,
+                entregador_nome,
+                status_formatado,
+                criado_em,
+                saiu_em,
+                entregue_em
             ])
 
-        tabela = Table(dados, repeatRows=1)
+        tabela = Table(
+            dados,
+            repeatRows=1,
+            colWidths=[42, 105, 90, 78, 72, 72, 72]
+        )
         tabela.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
         ]))
 
         elementos.append(tabela)

@@ -2,55 +2,100 @@
 {% block title %}Relatórios{% endblock %}
 
 {% block content %}
-<div class="page-head">
+<div class="page-head relatorio-head">
   <div>
     <h1>Relatórios</h1>
-    <p class="muted">Relatórios por período</p>
+    <p class="muted">Acompanhe pedidos, horários e desempenho das entregas</p>
   </div>
 </div>
 
 <div class="panel">
-  <h2>Filtros</h2>
+  <div class="panel-head-flex">
+    <div>
+      <h2>Filtros do relatório</h2>
+      <p class="muted">Selecione o período para visualizar os pedidos e baixar o PDF</p>
+    </div>
+  </div>
 
   <form method="get" class="form-grid">
-    <input type="date" name="inicio" value="{{ inicio or '' }}">
-    <input type="date" name="fim" value="{{ fim or '' }}">
-    <button type="submit" class="btn btn-primary">Filtrar</button>
-    <a
-      class="btn btn-secondary"
-      href="{{ url_for('relatorios_pdf', inicio=inicio, fim=fim) }}"
-      target="_blank"
-    >
-      Baixar PDF
-    </a>
+    <div>
+      <label for="inicio">Data inicial</label>
+      <input type="date" id="inicio" name="inicio" value="{{ inicio or '' }}">
+    </div>
+
+    <div>
+      <label for="fim">Data final</label>
+      <input type="date" id="fim" name="fim" value="{{ fim or '' }}">
+    </div>
+
+    <div style="display:flex; align-items:end; gap:10px; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+
+      <a
+        class="btn btn-secondary"
+        href="{{ url_for('relatorios_pdf', inicio=inicio, fim=fim) }}"
+        target="_blank"
+      >
+        Baixar PDF
+      </a>
+    </div>
   </form>
 </div>
 
 <div class="cards-grid">
-  <div class="card">
-    <h3>Total de pedidos</h3>
-    <strong>{{ total_pedidos }}</strong>
+  <div class="card card-gradient-primary">
+    <div class="card-top">
+      <span>Total de pedidos</span>
+      <span class="card-icon">📦</span>
+    </div>
+    <div class="card-value">{{ total_pedidos }}</div>
+    <div class="card-subinfo">Pedidos encontrados no período</div>
   </div>
-  <div class="card">
-    <h3>Recebidos</h3>
-    <strong>{{ total_recebidos }}</strong>
+
+  <div class="card card-gradient-blue">
+    <div class="card-top">
+      <span>Recebidos</span>
+      <span class="card-icon">📥</span>
+    </div>
+    <div class="card-value">{{ total_recebidos }}</div>
+    <div class="card-subinfo">Aguardando andamento</div>
   </div>
-  <div class="card">
-    <h3>Separação</h3>
-    <strong>{{ total_separacao }}</strong>
+
+  <div class="card card-gradient-yellow">
+    <div class="card-top">
+      <span>Separação</span>
+      <span class="card-icon">🧾</span>
+    </div>
+    <div class="card-value">{{ total_separacao }}</div>
+    <div class="card-subinfo">Pedidos em preparação</div>
   </div>
-  <div class="card">
-    <h3>Saiu para entrega</h3>
-    <strong>{{ total_saiu_entrega }}</strong>
+
+  <div class="card card-gradient-orange">
+    <div class="card-top">
+      <span>Em rota</span>
+      <span class="card-icon">🛵</span>
+    </div>
+    <div class="card-value">{{ total_saiu_entrega }}</div>
+    <div class="card-subinfo">Pedidos com entregador</div>
   </div>
-  <div class="card">
-    <h3>Entregues</h3>
-    <strong>{{ total_entregues }}</strong>
+
+  <div class="card card-gradient-green">
+    <div class="card-top">
+      <span>Entregues</span>
+      <span class="card-icon">✅</span>
+    </div>
+    <div class="card-value">{{ total_entregues }}</div>
+    <div class="card-subinfo">Finalizados com sucesso</div>
   </div>
 </div>
 
 <div class="panel">
-  <h2>Pedidos do período</h2>
+  <div class="panel-head-flex">
+    <div>
+      <h2>Pedidos do período</h2>
+      <p class="muted">Agora com horários visíveis e status mais organizados</p>
+    </div>
+  </div>
 
   <div class="table-wrap">
     <table>
@@ -61,26 +106,119 @@
           <th>Endereço</th>
           <th>Entregador</th>
           <th>Status</th>
-          <th>Data</th>
+          <th>Criado em</th>
+          <th>Saiu p/ entrega</th>
+          <th>Entregue em</th>
         </tr>
       </thead>
       <tbody>
         {% for p in pedidos %}
         <tr>
-          <td>#{{ p.id }}</td>
-          <td>{{ p.cliente.nome if p.cliente else "-" }}</td>
+          <td><strong>#{{ p.id }}</strong></td>
+          <td>
+            <div style="font-weight:700;">{{ p.cliente.nome if p.cliente else "-" }}</div>
+            {% if p.cliente and p.cliente.bairro %}
+              <div class="muted" style="font-size:12px;">{{ p.cliente.bairro }}</div>
+            {% endif %}
+          </td>
           <td>{{ p.cliente.endereco if p.cliente else "-" }}</td>
           <td>{{ p.entregador.nome if p.entregador else "-" }}</td>
-          <td>{{ p.status }}</td>
-          <td>{{ p.criado_em.strftime("%d/%m/%Y %H:%M") if p.criado_em else "-" }}</td>
+          <td>
+            <span class="badge
+              {% if p.status == 'recebido' %}badge-blue
+              {% elif p.status == 'separacao' %}badge-yellow
+              {% elif p.status == 'saiu_entrega' %}badge-orange
+              {% elif p.status == 'entregue' %}badge-green
+              {% else %}badge-gray{% endif %}
+            ">
+              {{ p.status.replace('_', ' ').upper() }}
+            </span>
+          </td>
+          <td>
+            {% if p.criado_em %}
+              <div>{{ p.criado_em.strftime("%d/%m/%Y") }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.criado_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            {% if p.saiu_entrega_em %}
+              <div>{{ p.saiu_entrega_em.strftime("%d/%m/%Y") }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.saiu_entrega_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>
+            {% if p.entregue_em %}
+              <div>{{ p.entregue_em.strftime("%d/%m/%Y") }}</div>
+              <div class="muted" style="font-size:12px;">{{ p.entregue_em.strftime("%H:%M") }}</div>
+            {% else %}
+              -
+            {% endif %}
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="6">Nenhum pedido encontrado para esse período.</td>
+          <td colspan="8">Nenhum pedido encontrado para esse período.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<style>
+.relatorio-head{
+  margin-bottom: 18px;
+}
+
+.card-subinfo{
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: .86;
+}
+
+.card-gradient-primary{
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #fff;
+}
+
+.card-gradient-blue{
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: #fff;
+}
+
+.card-gradient-yellow{
+  background: linear-gradient(135deg, #d97706, #f59e0b);
+  color: #fff;
+}
+
+.card-gradient-orange{
+  background: linear-gradient(135deg, #ea580c, #f97316);
+  color: #fff;
+}
+
+.card-gradient-green{
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
+
+.card-gradient-primary .card-top,
+.card-gradient-blue .card-top,
+.card-gradient-yellow .card-top,
+.card-gradient-orange .card-top,
+.card-gradient-green .card-top{
+  color: rgba(255,255,255,.92);
+}
+
+.card-gradient-primary .card-value,
+.card-gradient-blue .card-value,
+.card-gradient-yellow .card-value,
+.card-gradient-orange .card-value,
+.card-gradient-green .card-value{
+  color: #fff;
+}
+</style>
 {% endblock %}
