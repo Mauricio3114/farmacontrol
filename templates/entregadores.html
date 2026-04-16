@@ -10,12 +10,14 @@
 </div>
 
 <div class="panel">
-  <h2>Novo Entregador</h2>
+  <h2 id="form-titulo">Novo Entregador</h2>
 
-  <form method="post" class="form-grid">
-    <input type="text" name="nome" placeholder="Nome do entregador" required>
-    <input type="text" name="telefone" placeholder="Telefone" required>
-    <input type="password" name="senha" placeholder="Senha do entregador" required>
+  <form method="post" class="form-grid" id="form-entregador">
+    <input type="hidden" name="entregador_id" id="entregador_id">
+
+    <input type="text" name="nome" id="nome" placeholder="Nome do entregador" required>
+    <input type="text" name="telefone" id="telefone" placeholder="Telefone" required>
+    <input type="password" name="senha" id="senha" placeholder="Senha do entregador">
 
     <div class="form-block">
       <label class="muted">Farmácias que o entregador poderá atender</label>
@@ -23,14 +25,19 @@
       <div class="checkbox-grid">
         {% for farmacia in farmacias_usuario %}
         <label class="checkbox-item">
-          <input type="checkbox" name="farmacias_ids" value="{{ farmacia.id }}">
+          <input type="checkbox" name="farmacias_ids" value="{{ farmacia.id }}" class="farmacia-checkbox">
           {{ farmacia.nome }}
         </label>
         {% endfor %}
       </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Cadastrar Entregador</button>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-primary" id="btn-submit">Cadastrar Entregador</button>
+      <button type="button" class="btn btn-secondary" id="btn-cancelar" style="display:none;" onclick="resetarFormularioEntregador()">
+        Cancelar edição
+      </button>
+    </div>
   </form>
 </div>
 
@@ -57,6 +64,7 @@
           <th>Farmácias</th>
           <th>Status</th>
           <th>Login</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
@@ -66,8 +74,10 @@
           <td>{{ entregador.nome }}</td>
           <td>{{ entregador.telefone }}</td>
           <td>
+            {% set ids_farmacias = [] %}
             {% if entregador.vinculos_farmacias %}
               {% for vinculo in entregador.vinculos_farmacias if vinculo.ativo %}
+                {% set _ = ids_farmacias.append(vinculo.farmacia_id) %}
                 {{ vinculo.farmacia.nome }}{% if not loop.last %}, {% endif %}
               {% endfor %}
             {% else %}
@@ -76,14 +86,75 @@
           </td>
           <td>{{ "Ativo" if entregador.ativo else "Inativo" }}</td>
           <td><span class="tag">{{ entregador.telefone }}</span></td>
+          <td>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button
+                type="button"
+                class="btn btn-warning"
+                onclick='editarEntregador({
+                  "id": {{ entregador.id }},
+                  "nome": {{ entregador.nome|tojson }},
+                  "telefone": {{ entregador.telefone|tojson }},
+                  "farmacias_ids": {{ ids_farmacias|tojson }}
+                })'
+              >
+                Editar
+              </button>
+
+              <form method="post" action="{{ url_for('apagar_entregador', entregador_id=entregador.id) }}" onsubmit="return confirm('Tem certeza que deseja apagar este entregador?');">
+                <button type="submit" class="btn btn-danger">Apagar</button>
+              </form>
+            </div>
+          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="6">Nenhum entregador cadastrado.</td>
+          <td colspan="7">Nenhum entregador cadastrado.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<script>
+function editarEntregador(entregador) {
+  document.getElementById("form-titulo").textContent = "Editar Entregador";
+  document.getElementById("entregador_id").value = entregador.id;
+  document.getElementById("nome").value = entregador.nome || "";
+  document.getElementById("telefone").value = entregador.telefone || "";
+  document.getElementById("senha").value = "";
+  document.getElementById("senha").placeholder = "Nova senha (deixe em branco para manter)";
+
+  const checkboxes = document.querySelectorAll(".farmacia-checkbox");
+  checkboxes.forEach(cb => {
+    cb.checked = entregador.farmacias_ids.includes(parseInt(cb.value));
+  });
+
+  document.getElementById("btn-submit").textContent = "Salvar Alterações";
+  document.getElementById("btn-cancelar").style.display = "inline-flex";
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
+function resetarFormularioEntregador() {
+  document.getElementById("form-titulo").textContent = "Novo Entregador";
+  document.getElementById("entregador_id").value = "";
+  document.getElementById("nome").value = "";
+  document.getElementById("telefone").value = "";
+  document.getElementById("senha").value = "";
+  document.getElementById("senha").placeholder = "Senha do entregador";
+
+  const checkboxes = document.querySelectorAll(".farmacia-checkbox");
+  checkboxes.forEach(cb => {
+    cb.checked = false;
+  });
+
+  document.getElementById("btn-submit").textContent = "Cadastrar Entregador";
+  document.getElementById("btn-cancelar").style.display = "none";
+}
+</script>
 {% endblock %}

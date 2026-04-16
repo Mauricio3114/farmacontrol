@@ -1403,13 +1403,14 @@ def registrar_rotas(app):
             return redirect(url_for("dashboard"))
 
         if request.method == "POST":
+            entregador_id = request.form.get("entregador_id", "").strip()
             nome = request.form.get("nome", "").strip()
             telefone = request.form.get("telefone", "").strip()
             senha = request.form.get("senha", "").strip()
             farmacias_ids = request.form.getlist("farmacias_ids")
 
-            if not nome or not telefone or not senha:
-                flash("Preencha todos os campos do entregador.", "warning")
+            if not nome or not telefone:
+                flash("Preencha nome e telefone do entregador.", "warning")
                 return redirect(url_for("entregadores"))
 
             if not farmacias_ids:
@@ -1421,6 +1422,74 @@ def registrar_rotas(app):
 
             if not farmacias_ids:
                 flash("Nenhuma farmácia válida foi selecionada.", "danger")
+                return redirect(url_for("entregadores"))
+
+            # =========================
+            # EDIÇÃO
+            # =========================
+            if entregador_id:
+                entregador = Entregador.query.filter_by(id=int(entregador_id)).first()
+
+                if not entregador:
+                    flash("Entregador não encontrado.", "danger")
+                    return redirect(url_for("entregadores"))
+
+                vinculos_existentes = EntregadorFarmacia.query.filter(
+                    EntregadorFarmacia.entregador_id == entregador.id,
+                    EntregadorFarmacia.farmacia_id.in_(farmacias_permitidas_ids)
+                ).all()
+
+                if not vinculos_existentes and entregador.farmacia_id not in farmacias_permitidas_ids:
+                    flash("Você não tem permissão para editar este entregador.", "danger")
+                    return redirect(url_for("entregadores"))
+
+                # evitar conflito de telefone com outro entregador
+                outro_com_mesmo_telefone = Entregador.query.filter(
+                    Entregador.telefone == telefone,
+                    Entregador.id != entregador.id
+                ).first()
+
+                if outro_com_mesmo_telefone:
+                    flash("Já existe outro entregador com esse telefone.", "danger")
+                    return redirect(url_for("entregadores"))
+
+                entregador.nome = nome
+                entregador.telefone = telefone
+                entregador.farmacia_id = farmacias_ids[0]
+
+                if senha:
+                    entregador.set_password(senha)
+
+                # desativa vínculos antigos das farmácias que o usuário pode gerenciar
+                for vinculo in vinculos_existentes:
+                    vinculo.ativo = False
+
+                # ativa/cria os vínculos escolhidos
+                for farmacia_id in farmacias_ids:
+                    vinculo = EntregadorFarmacia.query.filter_by(
+                        entregador_id=entregador.id,
+                        farmacia_id=farmacia_id
+                    ).first()
+
+                    if vinculo:
+                        vinculo.ativo = True
+                    else:
+                        novo_vinculo = EntregadorFarmacia(
+                            entregador_id=entregador.id,
+                            farmacia_id=farmacia_id,
+                            ativo=True
+                        )
+                        db.session.add(novo_vinculo)
+
+                db.session.commit()
+                flash("Entregador atualizado com sucesso.", "success")
+                return redirect(url_for("entregadores"))
+
+            # =========================
+            # CADASTRO
+            # =========================
+            if not senha:
+                flash("Informe a senha do entregador.", "warning")
                 return redirect(url_for("entregadores"))
 
             entregador_existente = Entregador.query.filter_by(
@@ -1454,6 +1523,10 @@ def registrar_rotas(app):
                         )
                         db.session.add(vinculo)
                         adicionou = True
+                    else:
+                        if not vinculo_existente.ativo:
+                            vinculo_existente.ativo = True
+                            adicionou = True
 
                 db.session.commit()
 
@@ -1508,6 +1581,43 @@ def registrar_rotas(app):
             entregadores=lista,
             farmacias_usuario=farmacias_usuario
         )
+    
+    @app.route("/entregadores/<int:entregador_id>/apagar", methods=["POST"])
+    @login_required
+    def apagar_entregador(entregador_id):
+        if current_user.is_master:
+            flash("Área disponível apenas para usuários de farmácia.", "warning")
+            return redirect(url_for("dashboard"))
+
+        farmacias_usuario = farmacias_do_usuario_logado()
+        farmacias_permitidas_ids = [f.id for f in farmacias_usuario]
+
+        entregador = Entregador.query.filter_by(id=entregador_id).first()
+
+        if not entregador:
+            flash("Entregador não encontrado.", "danger")
+            return redirect(url_for("entregadores"))
+
+        vinculos_permitidos = EntregadorFarmacia.query.filter(
+            EntregadorFarmacia.entregador_id == entregador.id,
+            EntregadorFarmacia.farmacia_id.in_(farmacias_permitidas_ids)
+        ).all()
+
+        if not vinculos_permitidos and entregador.farmacia_id not in farmacias_permitidas_ids:
+            flash("Você não tem permissão para apagar este entregador.", "danger")
+            return redirect(url_for("entregadores"))
+
+        for vinculo in EntregadorFarmacia.query.filter_by(entregador_id=entregador.id).all():
+            db.session.delete(vinculo)
+
+        for sub in EntregadorPushSubscription.query.filter_by(entregador_id=entregador.id).all():
+            db.session.delete(sub)
+
+        db.session.delete(entregador)
+        db.session.commit()
+
+        flash("Entregador apagado com sucesso.", "success")
+        return redirect(url_for("entregadores"))
     # =========================
     # PEDIDOS
     # =========================
